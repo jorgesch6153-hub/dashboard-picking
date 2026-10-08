@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>Picking · líneas picadas</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--bg:#f4f5f7;--card:#ffffff;--ink:#14171c;--mut:#5b6270;--line:#e4e7ec;--soft:#eef1f5;
+ --acc:#2a78d6;--acc-dim:#b7d3f6;--acc-ink:#ffffff;--seq:#256abf;
+ --ok:#0b7a0b;--ok-bg:#e8f5e8;--warn:#a8401a;--warn-bg:#fdeee6;
+ --shadow:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.06);
+ color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111214;--card:#1a1b1e;--ink:#f2f3f5;--mut:#a3a8b3;--line:#2b2d32;--soft:#24262b;
+ --acc:#3987e5;--acc-dim:#1c3e66;--acc-ink:#ffffff;--seq:#5598e7;--ok:#5fd35f;--ok-bg:#16301a;--warn:#f0a070;--warn-bg:#3a2218;--shadow:none;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#111214;--card:#1a1b1e;--ink:#f2f3f5;--mut:#a3a8b3;--line:#2b2d32;--soft:#24262b;
+ --acc:#3987e5;--acc-dim:#1c3e66;--acc-ink:#ffffff;--seq:#5598e7;--ok:#5fd35f;--ok-bg:#16301a;--warn:#f0a070;--warn-bg:#3a2218;--shadow:none;color-scheme:dark}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:14.5px/1.45 Inter,"Segoe UI",system-ui,-apple-system,Roboto,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+main{max-width:1240px;margin:0 auto;padding:22px 16px 40px}
+/* encabezado */
+header{display:flex;flex-wrap:wrap;gap:14px;justify-content:space-between;align-items:center;margin-bottom:18px}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.logo{width:40px;height:40px;border-radius:11px;background:var(--acc);display:grid;place-items:center;flex:none}
+.logo svg{width:22px;height:22px;stroke:var(--acc-ink)}
+h1{font-size:1.35rem;margin:0;letter-spacing:-.02em;font-weight:700}
+.sub{color:var(--mut);font-size:.84rem;margin-top:1px}
+.acts{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+button,select,label.btn{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:9px;padding:8px 13px;cursor:pointer}
+button:focus-visible,select:focus-visible,label.btn:focus-within,summary:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+label.btn{background:var(--acc);color:var(--acc-ink);border-color:var(--acc);font-weight:600;display:inline-flex;align-items:center;gap:7px}
+label.btn svg{width:16px;height:16px;stroke:currentColor}
+input[type=file]{position:absolute;opacity:0;width:1px;height:1px}
+.who{color:var(--mut);font-size:.8rem;display:inline-flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:5px 11px}
+.dot{width:.5rem;height:.5rem;border-radius:50%;background:var(--mut);display:inline-block}
+.dot.on{background:var(--ok)}
+.link{background:none;border:0;padding:4px;color:var(--mut);font-size:.82rem;text-decoration:underline;cursor:pointer}
+/* período + KPI */
+.period{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:14px}
+.period label{font-size:.82rem;color:var(--mut);font-weight:500}
+.period select{font-weight:600;min-width:240px;padding:9px 12px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:12px;margin-bottom:14px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;box-shadow:var(--shadow)}
+.kpi span{display:block;color:var(--mut);font-size:.78rem;font-weight:500}
+.kpi b{display:block;font-size:1.65rem;line-height:1.15;margin-top:4px;letter-spacing:-.02em;font-weight:700}
+.kpi.main{background:var(--acc);border-color:var(--acc);color:var(--acc-ink)}
+.kpi.main span{color:var(--acc-ink);opacity:.85}
+/* mensajes de verificación */
+.msg{display:flex;gap:8px;align-items:flex-start;font-size:.85rem;margin:0 0 10px;padding:9px 12px;border-radius:10px;background:var(--card);border:1px solid var(--line);color:var(--mut)}
+.msg::before{content:"";flex:none;width:1.1rem;height:1.1rem;border-radius:50%;margin-top:1px;background:var(--line)}
+.msg.ok{background:var(--ok-bg);border-color:transparent;color:var(--ok)}
+.msg.ok::before{content:"✓";background:var(--ok);color:var(--card);font-size:.72rem;font-weight:700;display:grid;place-items:center}
+.msg.warn{background:var(--warn-bg);border-color:transparent;color:var(--warn);font-weight:600}
+.msg.warn::before{content:"!";background:var(--warn);color:var(--card);font-size:.75rem;font-weight:700;display:grid;place-items:center}
+.msg:empty{display:none}
+/* tarjetas */
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:6px}
+@media(max-width:860px){.grid{grid-template-columns:1fr}}
+section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 16px 10px;min-width:0;box-shadow:var(--shadow)}
+.full{grid-column:1/-1}
+h2{font-size:1rem;margin:0 0 2px;font-weight:600;letter-spacing:-.01em}
+section p{margin:0 0 10px;color:var(--mut);font-size:.8rem}
+.tools{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap}
+.tools select{padding:5px 9px;font-size:.8rem;border-radius:8px}
+.sels{display:flex;gap:6px;flex-wrap:wrap}
+/* gráficos */
+.chart{width:100%;min-height:230px;position:relative}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.chart .ax{fill:var(--mut);font-size:11px}
+.chart .gl{stroke:var(--line);stroke-width:1}
+.chart .bl{stroke:var(--mut);stroke-width:1;opacity:.5}
+.chart .bar{fill:var(--acc)}
+.chart .bar.lo{fill:var(--acc-dim)}
+.chart .hit{fill:transparent;cursor:default}
+.chart .hit:hover+.bar,.chart g:hover .bar{opacity:.85}
+.chart .avg{stroke:var(--ink);stroke-width:1.5;stroke-dasharray:5 4;opacity:.55}
+.chart .avgt{fill:var(--ink);font-size:11px;font-weight:600;opacity:.75}
+.empty{color:var(--mut);font-size:.85rem;padding:30px 0;text-align:center}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.76rem;color:var(--mut);margin:6px 0 4px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.legend i.line{height:0;border-top:2px dashed var(--ink);opacity:.55;border-radius:0;width:16px;vertical-align:3px}
+details{margin:6px 0 4px}
+summary{cursor:pointer;color:var(--acc);font-size:.82rem;font-weight:600;padding:4px 0}
+#tip{position:fixed;z-index:20;pointer-events:none;background:var(--ink);color:var(--bg);border-radius:9px;padding:8px 11px;font-size:.8rem;line-height:1.4;box-shadow:0 6px 20px rgba(0,0,0,.2);opacity:0;transition:opacity .08s;max-width:260px}
+#tip.on{opacity:1}
+#tip b{display:block;font-weight:600;margin-bottom:2px}
+/* rankings */
+ol{list-style:none;margin:0;padding:0;max-height:66vh;overflow-y:auto}
+li{display:grid;grid-template-columns:1.9rem minmax(4rem,8rem) 1fr 4.3rem 3.3rem;gap:9px;align-items:center;padding:6px 2px;border-top:1px solid var(--line)}
+li:first-child{border-top:0}
+li.u,li.hd{grid-template-columns:1.9rem minmax(4rem,8rem) minmax(1.5rem,1fr) 4rem 2.4rem 4.2rem}
+li.hd{position:sticky;top:0;background:var(--card);border-top:0;font-size:.74rem;color:var(--mut);font-weight:500;z-index:1}
+li.hd span{text-align:right}
+li.hd+li{border-top:0}
+.n{color:var(--mut);text-align:center;font-size:.76rem;font-weight:600;background:var(--soft);border-radius:6px;padding:2px 0}
+li:nth-child(-n+3):not(.hd) .n,li.hd~li:nth-child(-n+4) .n{background:var(--acc);color:var(--acc-ink)}
+li.u .n{background:var(--soft);color:var(--mut)}
+li.hd~li:nth-child(-n+4) .n{background:var(--acc);color:var(--acc-ink)}
+.k{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.b{height:.55rem;border-radius:4px;background:var(--soft);position:relative;overflow:hidden}
+.b::after{content:"";position:absolute;inset:0 auto 0 0;width:var(--w);background:var(--acc);border-radius:4px}
+.v{text-align:right;font-weight:600}.p{text-align:right;color:var(--mut);font-size:.8rem}
+/* tablas */
+.tw{overflow:auto;max-height:70vh;margin-bottom:8px;border-radius:10px}
+table{border-collapse:separate;border-spacing:0;width:100%;font-size:.84rem}
+th,td{padding:6px 9px;text-align:right;border-top:1px solid var(--line);white-space:nowrap}
+thead th{position:sticky;top:0;background:var(--card);color:var(--mut);font-weight:600;font-size:.76rem;border-top:0;z-index:2}
+th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--card);z-index:1}
+thead th:first-child{z-index:3}
+td:first-child{font-weight:600}
+td.z{color:var(--mut);opacity:.4}
+td.tot,th.tot{font-weight:700;background:var(--soft)}
+tfoot td{font-weight:700;border-top:2px solid var(--line)}
+#mx td.h{color:var(--ink)}
+#mx td.h.dk{color:#fff}
+#mx td.top{font-weight:700;box-shadow:inset 0 0 0 2px var(--ink)}
+/* bloqueo y diálogo */
+#lock{position:fixed;inset:0;background:var(--bg);display:none;align-items:center;justify-content:center;padding:16px;z-index:10}
+#lock.on{display:flex}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px;width:100%;max-width:370px;box-shadow:0 10px 30px rgba(0,0,0,.08)}
+.card h2{margin:0 0 4px;font-size:1.15rem}.card p{margin:0 0 14px;color:var(--mut);font-size:.86rem}
+.card input{font:inherit;width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--ink);margin-bottom:10px}
+.card input:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+.card .row{display:flex;gap:8px;justify-content:flex-end}
+.card button.pri{background:var(--acc);color:var(--acc-ink);border-color:var(--acc);font-weight:600}
+.err{color:var(--warn);font-size:.84rem;min-height:1.2em;margin:-4px 0 10px}
+dialog{border:0;padding:0;background:transparent;color:var(--ink)}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+footer{max-width:1240px;margin:0 auto;padding:0 16px 30px;color:var(--mut);font-size:.76rem}
+@media(max-width:520px){h1{font-size:1.15rem}.kpi b{font-size:1.35rem}.period select{min-width:0;width:100%}}
+</style></head><body>
+<main>
+<header>
+ <div class="brand"><div class="logo" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18"/><path d="M6 16V9"/><path d="M11 16V5"/><path d="M16 16v-5"/></svg></div>
+  <div><h1>Líneas picadas</h1><div class="sub" id="rng"></div></div></div>
+ <div class="acts">
+  <span class="who"><span class="dot" id="dot"></span><span id="wtxt">Conectando…</span></span>
+  <button class="link" id="out" type="button" title="Olvidar las claves guardadas en esta PC">Salir</button>
+  <label class="btn" id="lbl"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 20h16"/></svg><span id="lblt">Cargar Excel</span><input type="file" id="f" accept=".xlsx,.xls" multiple></label>
+ </div>
+</header>
+<div class="period"><label for="wk">Período</label><select id="wk"></select></div>
+<div class="kpis">
+ <div class="kpi main"><span>Líneas picadas</span><b id="k1">–</b></div>
+ <div class="kpi"><span>Días con datos</span><b id="k2">–</b></div>
+ <div class="kpi"><span>Sucursales</span><b id="k3">–</b></div>
+ <div class="kpi"><span>Usuarios</span><b id="k4">–</b></div>
+ <div class="kpi"><span>Promedio por usuario</span><b id="k5">–</b></div>
+ <div class="kpi"><span>Promedio por usuario y día trabajado</span><b id="k6">–</b></div>
+</div>
+<p id="msg" class="msg">Cargando datos…</p>
+<p id="msg2" class="msg"></p>
+<div class="grid">
+ <section class="full"><h2>Líneas por día</h2><p id="dsub">Total de líneas picadas cada día del período</p>
+  <div class="chart" id="cd"></div>
+  <div class="legend"><span><i style="background:var(--acc)"></i>Líneas del día</span><span><i class="line"></i>Promedio por día del período</span></div>
+  <details><summary>Ver tabla por día</summary><div class="tw"><table id="cdt"></table></div></details></section>
+ <section><h2>Tendencia semanal</h2><p>Total por semana (lunes a domingo), todas las semanas cargadas · resaltado = período elegido</p>
+  <div class="chart" id="cw"></div></section>
+ <section><h2>Áreas</h2><p>Líneas picadas por área, de mayor a menor</p><ol id="la"></ol></section>
+ <section><div class="tools"><div><h2>Sucursales</h2><p>Todas las áreas · promedio = líneas ÷ días en que tuvo picking</p></div><select id="ss" aria-label="Ordenar sucursales"><option value="t">Ordenar por líneas</option><option value="p">Ordenar por promedio/día</option></select></div><ol id="ls"></ol></section>
+ <section><div class="tools"><div><h2>Usuarios</h2><p id="usub">Suma de todas las áreas · promedio = líneas ÷ días en que picó</p></div><div class="sels"><select id="ua" aria-label="Filtrar por área"><option value="">Todas las áreas</option></select><select id="us" aria-label="Ordenar usuarios"><option value="t">Ordenar por líneas</option><option value="p">Ordenar por promedio/día</option></select></div></div><ol id="lu"></ol></section>
+ <section class="full"><div class="tools"><div><h2>Usuario × área</h2><p>Líneas picadas por cada usuario en cada área · color más intenso = más líneas · recuadro = área donde más picó</p></div><select id="ms" aria-label="Ordenar tabla"><option value="t">Ordenar por total</option><option value="n">Ordenar por nombre</option></select></div><div class="tw"><table id="mx"></table></div></section>
+</div>
+</main>
+<footer id="foot">Acceso con clave. Solo el encargado puede cargar datos.</footer>
+<div id="tip" role="tooltip"></div>
+<div id="lock"><form class="card" id="lf"><h2>Líneas picadas</h2><p>Ingresá la clave para ver el dashboard.</p>
+ <input type="password" id="lk" autocomplete="current-password" aria-label="Clave para ver" placeholder="Clave" required>
+ <div class="err" id="le"></div><div class="row"><button class="pri" type="submit">Entrar</button></div></form></div>
+<dialog id="kd"><form class="card" id="kf" method="dialog"><h2>Clave de carga</h2><p>Solo el encargado puede subir datos. Se recordará en esta PC.</p>
+ <input type="password" id="kk" autocomplete="off" aria-label="Clave de carga" placeholder="Clave de carga">
+ <div class="err" id="ke"></div><div class="row"><button type="button" id="kc">Cancelar</button><button class="pri" type="submit">Continuar</button></div></form></dialog>
+<script>
+let D={},sel=null,usort='t',ssort='t',uarea='',msort='t';
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const nf=new Intl.NumberFormat('es'),nf1=new Intl.NumberFormat('es',{maximumFractionDigits:1});
+const T=d=>new Date(d+'T00:00:00Z');
+const mon=d=>{const t=T(d);t.setUTCDate(t.getUTCDate()-((t.getUTCDay()+6)%7));return t.toISOString().slice(0,10)};
+const add=(d,n)=>{const t=T(d);t.setUTCDate(t.getUTCDate()+n);return t.toISOString().slice(0,10)};
+const fmt=d=>new Intl.DateTimeFormat('es',{day:'numeric',month:'short',timeZone:'UTC'}).format(T(d));
+const fmtY=d=>new Intl.DateTimeFormat('es',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}).format(T(d));
+const fmtW=d=>new Intl.DateTimeFormat('es',{weekday:'long',day:'numeric',month:'long',year:'numeric',timeZone:'UTC'}).format(T(d));
+const dm=d=>`${+d.slice(8)}/${+d.slice(5,7)}`;
+// ===== Lectura del Excel (sin cambios respecto de la versión anterior) =====
+function iso(v){
+ if(typeof v==='number'&&v>20000&&v<80000)return new Date(Date.UTC(1899,11,30)+Math.floor(v)*864e5).toISOString().slice(0,10);
+ if(v instanceof Date)return new Date(Date.UTC(v.getFullYear(),v.getMonth(),v.getDate())).toISOString().slice(0,10);
+ const t=String(v??'').trim();let m=t.match(/^\d{4}-\d{2}-\d{2}/);if(m)return m[0];
+ m=t.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})/);if(m)return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+ return null}
+// hoja -> clave; 'ua' = usuario x area (Fecha, Area, Usuario, Lineas)
+const MAP={'x sucursal':'s','x usuario':'u','x area':'a','usuario x area':'ua'};
+const blank=()=>({s:[],u:[],a:[],ua:[]});
+// Reporte detallado (una fila = una línea picada): columnas Fecha, usuario, Sucursal Dest, Area
+const norm=s=>String(s??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase();
+const RAWCOLS={d:['fecha'],u:['usuario'],s:['sucursal dest','sucursal destino','sucursal'],a:['area']};
+function rawHeader(rows){
+ for(let i=0;i<Math.min(rows.length,15);i++){
+  const h=(rows[i]||[]).map(norm),ix={};
+  for(const[k,names]of Object.entries(RAWCOLS)){for(const nm of names){const j=h.indexOf(nm);if(j>=0){ix[k]=j;break}}}
+  if(Object.keys(ix).length===4)return{row:i,ix}}
+ return null}
+function parseRaw(rows,hd){
+ const cnt={s:new Map(),u:new Map(),a:new Map(),ua:new Map()};let skip=0,n=0;
+ const inc=(m,k)=>m.set(k,(m.get(k)||0)+1);
+ for(let i=hd.row+1;i<rows.length;i++){
+  const r=rows[i];if(!r||!r.length)continue;
+  const d=iso(r[hd.ix.d]),u=String(r[hd.ix.u]??'').trim(),su=String(r[hd.ix.s]??'').trim(),a=String(r[hd.ix.a]??'').trim();
+  if(!d&&!u&&!su&&!a)continue;
+  if(!d||!u||!su||!a){skip++;continue}
+  n++;inc(cnt.s,d+'\u0001'+su);inc(cnt.u,d+'\u0001'+u);inc(cnt.a,d+'\u0001'+a);inc(cnt.ua,d+'\u0001'+a+'\u0001'+u)}
+ const byDate={};
+ for(const k of['s','u','a','ua'])for(const[key,v]of cnt[k]){const p=key.split('\u0001');(byDate[p[0]]=byDate[p[0]]||blank())[k].push([...p.slice(1),v])}
+ return{byDate,skip:{s:skip,u:0,a:0,ua:0},raw:n}}
+function parseWb(wb){
+ for(const n of wb.SheetNames){
+  if(MAP[n.trim().toLowerCase()])continue;
+  const rows=XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:true,blankrows:false});
+  const hd=rawHeader(rows);
+  if(hd)return parseRaw(rows,hd)}
+ const byDate={},skip={s:0,u:0,a:0,ua:0};
+ for(const n of wb.SheetNames){
+  const k=MAP[n.trim().toLowerCase()];if(!k)continue;
+  let started=false;
+  XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:true,blankrows:false}).forEach(r=>{
+   if(!r||!r.length||r.every(c=>c===null||c===undefined||String(c).trim()===''))return;
+   const d=iso(r[0]);
+   if(!started&&d===null)return; // filas de título/encabezado antes de los datos
+   started=true;
+   if(k==='ua'){
+    const area=String(r[1]??'').trim(),user=String(r[2]??'').trim(),v=Number(r[3]);
+    if(!d||!area||!user||!Number.isFinite(v)){skip.ua++;return}
+    (byDate[d]=byDate[d]||blank()).ua.push([area,user,v]);
+   }else{
+    const key=String(r[1]??'').trim(),v=Number(r[2]);
+    if(!d||!key||!Number.isFinite(v)){skip[k]++;return}
+    (byDate[d]=byDate[d]||blank())[k].push([key,v]);
+   }})}
+ return{byDate,skip}}
+function agg(rows){const m=new Map();rows.forEach(r=>m.set(r[0],(m.get(r[0])||0)+r[1]));return[...m].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]))}
+// ===== Presentación =====
+function list(el,rows){
+ const t=rows.reduce((s,r)=>s+r[1],0),mx=rows.length?rows[0][1]:1;
+ el.innerHTML=rows.map((r,i)=>`<li><span class="n">${i+1}</span><span class="k" title="${esc(r[0])}">${esc(r[0])}</span><span class="b" style="--w:${(r[1]/mx*100).toFixed(1)}%"></span><span class="v">${nf.format(r[1])}</span><span class="p">${(r[1]/t*100).toFixed(1)}%</span></li>`).join('')}
+function aggD(rows){const m=new Map();rows.forEach(([k,v,d])=>{const o=m.get(k)||{t:0,dd:new Set()};o.t+=v;if(v>0)o.dd.add(d);m.set(k,o)});return[...m].map(([k,o])=>[k,o.t,o.dd.size,o.dd.size?o.t/o.dd.size:0])}
+function listD(el,rows,srt){
+ const ix=srt==='t'?1:3;rows.sort((a,b)=>b[ix]-a[ix]||a[0].localeCompare(b[0]));
+ const mx=rows.length&&rows[0][ix]?rows[0][ix]:1;
+ el.innerHTML='<li class="hd u"><span></span><span></span><span></span><span>Líneas</span><span>Días</span><span>Prom./día</span></li>'+rows.map((r,j)=>`<li class="u"><span class="n">${j+1}</span><span class="k" title="${esc(r[0])}">${esc(r[0])}</span><span class="b" style="--w:${(r[ix]/mx*100).toFixed(1)}%"></span><span class="v">${nf.format(r[1])}</span><span class="p">${r[2]}</span><span class="v">${nf1.format(r[3])}</span></li>`).join('')}
+function matrix(UA){
+ const el=$('mx');
+ if(!UA.length){el.innerHTML='<tbody><tr><td style="position:static;font-weight:400;color:var(--mut)">Sin datos de "usuario x area" en este período. Cargá el Excel con esa hoja.</td></tr></tbody>';return}
+ const at=new Map(),ut=new Map(),cell=new Map();
+ UA.forEach(([a,u,v])=>{at.set(a,(at.get(a)||0)+v);ut.set(u,(ut.get(u)||0)+v);const k=u+'\u0001'+a;cell.set(k,(cell.get(k)||0)+v)});
+ const areas=[...at].sort((x,y)=>y[1]-x[1]||x[0].localeCompare(y[0])).map(x=>x[0]);
+ const users=[...ut].sort(msort==='n'?(x,y)=>x[0].localeCompare(y[0]):(x,y)=>y[1]-x[1]||x[0].localeCompare(y[0])).map(x=>x[0]);
+ const tot=[...ut.values()].reduce((s,v)=>s+v,0);
+ const cmax=Math.max(...cell.values(),1);
+ let h='<thead><tr><th>Usuario</th>'+areas.map(a=>`<th>${esc(a)}</th>`).join('')+'<th class="tot">Total</th></tr></thead><tbody>';
+ users.forEach(u=>{
+  const vals=areas.map(a=>cell.get(u+'\u0001'+a)||0),mx=Math.max(...vals);
+  h+=`<tr><td title="${esc(u)}">${esc(u)}</td>`+vals.map(v=>{if(!v)return'<td class="z">·</td>';const p=Math.round(8+82*Math.sqrt(v/cmax));return`<td class="h${p>55?' dk':''}${v===mx?' top':''}" style="background:color-mix(in srgb,var(--seq) ${p}%,var(--card))">${nf.format(v)}</td>`}).join('')+`<td class="tot">${nf.format(ut.get(u))}</td></tr>`});
+ h+='</tbody><tfoot><tr><td>Total</td>'+areas.map(a=>`<td>${nf.format(at.get(a))}</td>`).join('')+`<td class="tot">${nf.format(tot)}</td></tr></tfoot>`;
+ el.innerHTML=h}
+// gráfico de columnas en SVG; items: {x (etiqueta eje), v (valor), lo (atenuado), tip:[título, líneas...]}
+function niceStep(raw){if(raw<=0)return 1;const p=Math.pow(10,Math.floor(Math.log10(raw))),f=raw/p;return(f<=1?1:f<=2?2:f<=2.5?2.5:f<=5?5:10)*p}
+function colChart(el,items,avg){
+ if(!items.length){el.innerHTML='<div class="empty">Sin datos en este período</div>';return}
+ const W=Math.max(300,Math.round(el.clientWidth||700)),H=240,pl=48,pr=10,pt=14,pb=26;
+ const vmax=Math.max(...items.map(i=>i.v),avg||0,1),st=niceStep(vmax/4),top=Math.ceil(vmax/st)*st;
+ const iw=W-pl-pr,ih=H-pt-pb,bw=iw/items.length,gap=Math.min(8,Math.max(2,bw*.28)),w=Math.max(1,bw-gap);
+ const y=v=>pt+ih-(v/top)*ih;
+ const cf=new Intl.NumberFormat('es',{notation:'compact',maximumFractionDigits:1});
+ let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Gráfico de columnas">`;
+ for(let v=0;v<=top+1e-9;v+=st){const yy=y(v).toFixed(1);s+=`<line class="${v?'gl':'bl'}" x1="${pl}" x2="${W-pr}" y1="${yy}" y2="${yy}"/><text class="ax" x="${pl-8}" y="${(+yy+4).toFixed(1)}" text-anchor="end">${cf.format(v)}</text>`}
+ const every=Math.max(1,Math.ceil(items.length/Math.max(1,Math.floor(iw/38))));
+ items.forEach((it,i)=>{
+  const x=pl+i*bw+gap/2,yt=y(it.v),h=pt+ih-yt,r=Math.min(4,w/2,h);
+  const path=h>0?`M${x},${pt+ih}V${yt+r}Q${x},${yt} ${x+r},${yt}H${x+w-r}Q${x+w},${yt} ${x+w},${yt+r}V${pt+ih}Z`:'';
+  s+=`<g data-tip="${esc(it.tip.join('\n'))}"><rect class="hit" x="${pl+i*bw}" y="${pt}" width="${bw}" height="${ih}"/>${path?`<path class="bar${it.lo?' lo':''}" d="${path}"/>`:''}</g>`;
+  if(i%every===0)s+=`<text class="ax" x="${(x+w/2).toFixed(1)}" y="${H-8}" text-anchor="middle">${esc(it.x)}</text>`});
+ if(avg){const ya=y(avg).toFixed(1);s+=`<line class="avg" x1="${pl}" x2="${W-pr}" y1="${ya}" y2="${ya}"/><text class="avgt" x="${W-pr}" y="${(+ya-5).toFixed(1)}" text-anchor="end">Prom. ${nf1.format(avg)}</text>`}
+ el.innerHTML=s+'</svg>'}
+const dayTot=d=>(D[d].s||[]).reduce((s,x)=>s+x[1],0);
+const dayUsers=d=>new Set((D[d].u||[]).filter(x=>x[1]>0).map(x=>x[0])).size;
+function charts(ds,sel_ds){
+ // por día
+ const items=sel_ds.map(d=>{const t=dayTot(d),nu=dayUsers(d);return{x:dm(d),v:t,tip:[fmtW(d),`${nf.format(t)} líneas`,`${nu} usuarios · ${(D[d].s||[]).length} sucursales`]}});
+ const tot=items.reduce((s,i)=>s+i.v,0),avg=items.length?tot/items.length:0;
+ colChart($('cd'),items,items.length>1?avg:0);
+ $('cdt').innerHTML='<thead><tr><th>Día</th><th>Líneas</th><th>Usuarios</th><th>Sucursales</th><th>Áreas</th></tr></thead><tbody>'+
+  sel_ds.map(d=>`<tr><td>${esc(fmtY(d))}</td><td>${nf.format(dayTot(d))}</td><td>${dayUsers(d)}</td><td>${(D[d].s||[]).length}</td><td>${(D[d].a||[]).length}</td></tr>`).join('')+
+  `</tbody><tfoot><tr><td>Total</td><td class="tot">${nf.format(tot)}</td><td></td><td></td><td></td></tr></tfoot>`;
+ // por semana (todas las cargadas)
+ const wk=new Map();ds.forEach(d=>{const m=mon(d),o=wk.get(m)||{t:0,n:0,hi:false};o.t+=dayTot(d);o.n++;if(inSel(d))o.hi=true;wk.set(m,o)});
+ const wi=[...wk].sort((a,b)=>a[0]<b[0]?-1:1).map(([m,o])=>({x:dm(m),v:o.t,lo:sel!=='all'&&!o.hi,tip:[`Semana ${fmt(m)} – ${fmt(add(m,6))}`,`${nf.format(o.t)} líneas`,`${o.n} ${o.n===1?'día':'días'} con datos · ${nf1.format(o.t/o.n)} por día`]}));
+ colChart($('cw'),wi,0)}
+function opts(){
+ const ds=Object.keys(D).sort();
+ const dl=n=>`${n} ${n===1?'día':'días'}`;
+ const mn=new Intl.DateTimeFormat('es',{month:'long',year:'numeric',timeZone:'UTC'});
+ const ws=[...new Set(ds.map(mon))].sort().reverse(),ms=[...new Set(ds.map(d=>d.slice(0,7)))].sort().reverse();
+ return[...ws.map(m=>['w:'+m,`Semana ${fmt(m)} – ${fmt(add(m,6))} (${dl(ds.filter(d=>mon(d)===m).length)})`]),
+  ...ms.map(m=>['m:'+m,`${mn.format(T(m+'-01'))} (${dl(ds.filter(d=>d.slice(0,7)===m).length)})`])]}
+const inSel=d=>sel==='all'||(sel[0]==='w'?mon(d)===sel.slice(2):d.slice(0,7)===sel.slice(2));
+function draw(){
+ const ds=Object.keys(D).sort();
+ if(!ds.length){$('msg').className='msg';$('msg').textContent='Sin datos todavía. Cargá el Excel.';$('msg2').textContent='';['la','ls','lu','mx','cdt'].forEach(id=>$(id).innerHTML='');['cd','cw'].forEach(id=>$(id).innerHTML='<div class="empty">Sin datos</div>');['k1','k2','k3','k4','k5','k6'].forEach(id=>$(id).textContent='–');$('rng').textContent='';return}
+ const O=opts();
+ if(sel!=='all'&&!O.some(o=>o[0]===sel))sel=O[0][0];
+ const grp=(p,l)=>`<optgroup label="${l}">`+O.filter(o=>o[0].startsWith(p)).map(o=>`<option value="${o[0]}">${o[1]}</option>`).join('')+'</optgroup>';
+ $('wk').innerHTML=grp('w:','Semanas')+grp('m:','Meses')+'<option value="all">Todo el período</option>';
+ $('wk').value=sel;
+ const sel_ds=ds.filter(inSel);
+ const S=[],U=[],A=[],UA=[],UAd=[];
+ sel_ds.forEach(d=>{const r=D[d];S.push(...(r.s||[]).map(x=>[x[0],x[1],d]));U.push(...(r.u||[]).map(x=>[x[0],x[1],d]));A.push(...(r.a||[]).map(x=>[x[0],x[1]]));
+  (r.ua||[]).forEach(x=>{UA.push([x[0],x[1],x[2]]);UAd.push([x[0],x[1],x[2],d])})});
+ const ls=aggD(S),la=agg(A),lu=aggD(U);
+ // selector de área para usuarios
+ const areas=[...new Set([...A.map(x=>x[0]),...UA.map(x=>x[0])])].sort((x,y)=>{const f=k=>la.find(r=>r[0]===k)?.[1]||0;return f(y)-f(x)||x.localeCompare(y)});
+ if(uarea&&!areas.includes(uarea))uarea='';
+ $('ua').innerHTML='<option value="">Todas las áreas</option>'+areas.map(a=>`<option value="${esc(a)}">Área ${esc(a)}</option>`).join('');
+ $('ua').value=uarea;
+ let luShown=lu;
+ if(uarea){luShown=aggD(UAd.filter(x=>x[0]===uarea).map(x=>[x[1],x[2],x[3]]));$('usub').textContent=`Solo área ${uarea} · promedio = líneas ÷ días en que picó en esa área`}
+ else $('usub').textContent='Suma de todas las áreas · promedio = líneas ÷ días en que picó';
+ listD($('ls'),ls,ssort);list($('la'),la);listD($('lu'),luShown,usort);matrix(UA);
+ charts(ds,sel_ds);
+ const tot=S.reduce((s,r)=>s+r[1],0),utot=lu.reduce((s,r)=>s+r[1],0);
+ $('rng').textContent=`Datos cargados del ${fmtY(ds[0])} al ${fmtY(ds[ds.length-1])} · ${ds.length} días`;
+ $('k1').textContent=nf.format(tot);
+ $('k2').textContent=sel_ds.length;
+ $('k3').textContent=ls.length;$('k4').textContent=lu.length;
+ $('k5').textContent=lu.length?nf1.format(utot/lu.length):'–';
+ $('k6').textContent=U.filter(r=>r[1]>0).length?nf1.format(utot/[...new Set(U.filter(r=>r[1]>0).map(r=>r[0]+'|'+r[2]))].length):'–';
+ const sum=a=>(a||[]).reduce((s,x)=>s+x[x.length-1],0);
+ const bad=sel_ds.filter(d=>{const r=D[d];return sum(r.s)!==sum(r.u)||sum(r.u)!==sum(r.a)});
+ const m=$('msg');
+ if(bad.length){m.className='msg warn';m.textContent=`Revisar: sucursal, usuario y área no suman lo mismo en ${bad.map(fmt).join(', ')}.`}
+ else{m.className='msg ok';m.textContent=`Verificado: sucursales, usuarios y áreas suman lo mismo cada día (${nf.format(tot)} líneas en este período).`}
+ // control de la hoja usuario x area
+ const noUA=sel_ds.filter(d=>!(D[d].ua||[]).length);
+ const badUA=sel_ds.filter(d=>(D[d].ua||[]).length&&sum(D[d].ua)!==sum(D[d].u));
+ const m2=$('msg2');m2.className='msg';m2.textContent='';
+ const parts=[];
+ if(noUA.length)parts.push(`${noUA.length===sel_ds.length?'Ningún día':noUA.length+(noUA.length===1?' día':' días')} de este período ${noUA.length===1?'no tiene':'no tienen'} datos de "usuario x area"${noUA.length<=12?' ('+noUA.map(fmt).join(', ')+')':''}: volvé a cargar esos Excel`);
+ if(badUA.length)parts.push(`"usuario x area" no suma igual que "x usuario" en ${badUA.map(d=>`${fmt(d)} (${nf.format(sum(D[d].ua))} vs ${nf.format(sum(D[d].u))})`).join(', ')}`);
+ if(parts.length){m2.className='msg warn';m2.textContent='Usuario × área: '+parts.join(' · ')+'. La tabla y el filtro por área no incluyen esos días completos.'}
+ else if(sel_ds.length){m2.className='msg ok';m2.textContent='Verificado: "usuario x area" suma lo mismo que "x usuario" cada día.'}}
+$('us').onchange=e=>{usort=e.target.value;draw()};
+$('ss').onchange=e=>{ssort=e.target.value;draw()};
+$('ua').onchange=e=>{uarea=e.target.value;draw()};
+$('ms').onchange=e=>{msort=e.target.value;draw()};
+$('wk').onchange=e=>{sel=e.target.value;draw()};
+// redibujar los gráficos al cambiar el ancho de la ventana
+let rz=0,lastW=innerWidth;addEventListener('resize',()=>{if(innerWidth===lastW)return;lastW=innerWidth;clearTimeout(rz);rz=setTimeout(()=>{if(Object.keys(D).length)draw()},150)});
+// tooltip de los gráficos
+const tip=$('tip');
+function showTip(e){const g=e.target.closest&&e.target.closest('[data-tip]');if(!g){tip.classList.remove('on');return}
+ const p=g.getAttribute('data-tip').split('\n');tip.innerHTML=p.map((t,i)=>i?`<div>${esc(t)}</div>`:`<b>${esc(t)}</b>`).join('');
+ tip.classList.add('on');const r=tip.getBoundingClientRect();let x=e.clientX+14,y=e.clientY-r.height-12;
+ if(x+r.width>innerWidth-8)x=e.clientX-r.width-14;if(y<8)y=e.clientY+16;tip.style.left=Math.max(8,x)+'px';tip.style.top=y+'px'}
+document.addEventListener('pointermove',showTip);document.addEventListener('pointerdown',showTip);
+document.addEventListener('scroll',()=>tip.classList.remove('on'),{passive:true});
+const ls={get:k=>{try{return localStorage.getItem(k)||''}catch{return''}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch{}},del:k=>{try{localStorage.removeItem(k)}catch{}}};
+let VK=ls.get('picking.view'),UK=ls.get('picking.upload'),locked=false;
+function showLock(msg){locked=true;$('lock').classList.add('on');$('le').textContent=msg||'';setTimeout(()=>$('lk').focus(),50)}
+$('lf').onsubmit=async e=>{e.preventDefault();VK=$('lk').value.trim();$('le').textContent='Verificando…';locked=false;
+ const ok=await load();if(ok){ls.set('picking.view',VK);$('lock').classList.remove('on');$('lk').value=''}};
+$('out').onclick=()=>{ls.del('picking.view');ls.del('picking.upload');location.reload()};
+async function checkUpload(k){
+ const r=await fetch('/api/data',{method:'POST',headers:{'content-type':'application/json','x-upload-key':k},body:'{"check":true}'});
+ if(r.ok)return'';const j=await r.json().catch(()=>({}));return j.error||('Error '+r.status)}
+$('lbl').addEventListener('click',e=>{if(UK)return;e.preventDefault();$('ke').textContent='';$('kk').value='';$('kd').showModal();setTimeout(()=>$('kk').focus(),50)});
+$('kc').onclick=()=>$('kd').close();
+$('kf').onsubmit=async e=>{e.preventDefault();const k=$('kk').value.trim();if(!k){$('ke').textContent='Escribí la clave.';return}
+ $('ke').textContent='Verificando…';const err=await checkUpload(k);
+ if(err){$('ke').textContent=err;return}
+ UK=k;ls.set('picking.upload',k);$('kd').close();$('f').click()};
+let lastJSON='';
+async function load(){
+ if(locked)return false;
+ try{
+  const r=await fetch('/api/data',{cache:'no-store',headers:VK?{'x-view-key':VK}:{}});
+  if(r.status===401){ls.del('picking.view');showLock(VK?'Clave incorrecta.':'');VK='';return false}
+  if(!r.ok)throw new Error('http '+r.status);
+  const txt=await r.text();const j=JSON.parse(txt);
+  D=j.days||{};
+  $('dot').className='dot on';$('wtxt').textContent='Conectado';
+  if(txt!==lastJSON){lastJSON=txt;draw()}return true;
+ }catch(err){
+  $('dot').className='dot';$('wtxt').textContent='Sin conexión';
+  $('msg').className='msg warn';$('msg').textContent='No se pudo conectar con el servidor. Reintentando…';lastJSON='';
+  setTimeout(load,8000);return false;
+ }}
+$('f').onchange=async e=>{
+ if(typeof XLSX==='undefined'){$('msg').className='msg warn';$('msg').textContent='No se pudo cargar el lector de Excel. Revisá la conexión.';return}
+ const files=[...e.target.files];e.target.value='';
+ $('lblt').textContent='Subiendo…';
+ const msgs=[];let allDays={};
+ for(const f of files){
+  try{
+   $('lblt').textContent=`Leyendo ${f.name}…`;await new Promise(r=>setTimeout(r,30));
+   const{byDate,skip,raw}=parseWb(XLSX.read(await f.arrayBuffer(),{type:'array',cellDates:false,dense:true}));
+   const dates=Object.keys(byDate);
+   if(!dates.length){msgs.push(`${f.name}: no se reconoce. Debe ser el reporte detallado (columnas Fecha, usuario, Sucursal Dest, Area) o tener las hojas "x sucursal", "x usuario", "x area", "usuario x area".`);continue}
+   Object.assign(allDays,byDate);
+   const o=skip.s+skip.u+skip.a+skip.ua;
+   const sinUA=dates.filter(d=>!byDate[d].ua.length).length;
+   if(raw!==undefined){msgs.push(`${f.name}: reporte detallado, ${nf.format(raw)} líneas en ${dates.length} día(s)`+(skip.s?`, ${skip.s} filas omitidas por datos incompletos`:''));continue}
+   msgs.push(`${f.name}: ${dates.length} día(s) leídos`+(o?`, ${o} filas omitidas por datos inválidos`:'')+(sinUA?`, ${sinUA} día(s) sin hoja "usuario x area"`:''))
+  }catch(err){msgs.push(`${f.name}: error al leer (${err.message})`)}}
+ if(Object.keys(allDays).length){
+  try{
+   const r=await fetch('/api/data',{method:'POST',headers:{'content-type':'application/json','x-upload-key':UK},body:JSON.stringify({days:allDays})});
+   const j=await r.json().catch(()=>({}));
+   if(r.status===401){UK='';ls.del('picking.upload')}
+   if(!r.ok)throw new Error(j.error||('http '+r.status));
+   lastJSON='';await load();
+  }catch(err){msgs.push('No se pudo guardar en el servidor ('+err.message+').')}}
+ $('lblt').textContent='Cargar Excel';
+ const m=$('msg');m.textContent=msgs.join(' | ')+' — '+m.textContent};
+load();
+setInterval(load,30000);
+</script></body></html>
