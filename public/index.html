@@ -161,7 +161,7 @@ footer{max-width:1240px;margin:0 auto;padding:0 16px 30px;color:var(--mut);font-
  <section><h2>Áreas</h2><p>Líneas picadas por área, de mayor a menor</p><ol id="la"></ol></section>
  <section><div class="tools"><div><h2>Sucursales</h2><p>Todas las áreas · promedio = líneas ÷ días en que tuvo picking</p></div><select id="ss" aria-label="Ordenar sucursales"><option value="t">Ordenar por líneas</option><option value="p">Ordenar por promedio/día</option></select></div><ol id="ls"></ol></section>
  <section><div class="tools"><div><h2>Usuarios</h2><p id="usub">Suma de todas las áreas · promedio = líneas ÷ días en que picó</p></div><div class="sels"><select id="ua" aria-label="Filtrar por área"><option value="">Todas las áreas</option></select><select id="us" aria-label="Ordenar usuarios"><option value="t">Ordenar por líneas</option><option value="p">Ordenar por promedio/día</option></select></div></div><ol id="lu"></ol></section>
- <section class="full"><div class="tools"><div><h2>Usuario × área</h2><p>Líneas picadas por cada usuario en cada área · color más intenso = más líneas · recuadro = área donde más picó</p></div><select id="ms" aria-label="Ordenar tabla"><option value="t">Ordenar por total</option><option value="n">Ordenar por nombre</option></select></div><div class="tw"><table id="mx"></table></div></section>
+ <section class="full"><div class="tools"><div><h2>Usuario × área</h2><p>Líneas picadas por cada usuario en cada área · color más intenso = más líneas · recuadro = área donde más picó · Prom./día = total de todas las áreas ÷ días en que picó en el período elegido</p></div><select id="ms" aria-label="Ordenar tabla"><option value="t">Ordenar por total</option><option value="p">Ordenar por promedio/día</option><option value="n">Ordenar por nombre</option></select></div><div class="tw"><table id="mx"></table></div></section>
 </div>
 </main>
 <footer id="foot">Acceso con clave. Solo el encargado puede cargar datos.</footer>
@@ -253,17 +253,21 @@ function listD(el,rows,srt){
 function matrix(UA){
  const el=$('mx');
  if(!UA.length){el.innerHTML='<tbody><tr><td style="position:static;font-weight:400;color:var(--mut)">Sin datos de "usuario x area" en este período. Cargá el Excel con esa hoja.</td></tr></tbody>';return}
- const at=new Map(),ut=new Map(),cell=new Map();
- UA.forEach(([a,u,v])=>{at.set(a,(at.get(a)||0)+v);ut.set(u,(ut.get(u)||0)+v);const k=u+'\u0001'+a;cell.set(k,(cell.get(k)||0)+v)});
+ const at=new Map(),ut=new Map(),cell=new Map(),udd=new Map(),pd=new Set();
+ UA.forEach(([a,u,v,d])=>{at.set(a,(at.get(a)||0)+v);ut.set(u,(ut.get(u)||0)+v);const k=u+'\u0001'+a;cell.set(k,(cell.get(k)||0)+v);
+  if(v>0){if(!udd.has(u))udd.set(u,new Set());udd.get(u).add(d);pd.add(d)}});
+ // días en que picó cada usuario (cualquier área) y promedio por día dentro del período elegido
+ const ud=u=>udd.has(u)?udd.get(u).size:0,up=u=>ud(u)?ut.get(u)/ud(u):0;
  const areas=[...at].sort((x,y)=>y[1]-x[1]||x[0].localeCompare(y[0])).map(x=>x[0]);
- const users=[...ut].sort(msort==='n'?(x,y)=>x[0].localeCompare(y[0]):(x,y)=>y[1]-x[1]||x[0].localeCompare(y[0])).map(x=>x[0]);
+ const users=[...ut].sort(msort==='n'?(x,y)=>x[0].localeCompare(y[0]):msort==='p'?(x,y)=>up(y[0])-up(x[0])||x[0].localeCompare(y[0]):(x,y)=>y[1]-x[1]||x[0].localeCompare(y[0])).map(x=>x[0]);
  const tot=[...ut.values()].reduce((s,v)=>s+v,0);
  const cmax=Math.max(...cell.values(),1);
- let h='<thead><tr><th>Usuario</th>'+areas.map(a=>`<th>${esc(a)}</th>`).join('')+'<th class="tot">Total</th></tr></thead><tbody>';
+ const udsum=users.reduce((s,u)=>s+ud(u),0);
+ let h='<thead><tr><th>Usuario</th>'+areas.map(a=>`<th>${esc(a)}</th>`).join('')+'<th class="tot">Total</th><th class="tot">Días</th><th class="tot">Prom./día</th></tr></thead><tbody>';
  users.forEach(u=>{
   const vals=areas.map(a=>cell.get(u+'\u0001'+a)||0),mx=Math.max(...vals);
-  h+=`<tr><td title="${esc(u)}">${esc(u)}</td>`+vals.map(v=>{if(!v)return'<td class="z">·</td>';const p=Math.round(8+82*Math.sqrt(v/cmax));return`<td class="h${p>55?' dk':''}${v===mx?' top':''}" style="background:color-mix(in srgb,var(--seq) ${p}%,var(--card))">${nf.format(v)}</td>`}).join('')+`<td class="tot">${nf.format(ut.get(u))}</td></tr>`});
- h+='</tbody><tfoot><tr><td>Total</td>'+areas.map(a=>`<td>${nf.format(at.get(a))}</td>`).join('')+`<td class="tot">${nf.format(tot)}</td></tr></tfoot>`;
+  h+=`<tr><td title="${esc(u)}">${esc(u)}</td>`+vals.map(v=>{if(!v)return'<td class="z">·</td>';const p=Math.round(8+82*Math.sqrt(v/cmax));return`<td class="h${p>55?' dk':''}${v===mx?' top':''}" style="background:color-mix(in srgb,var(--seq) ${p}%,var(--card))">${nf.format(v)}</td>`}).join('')+`<td class="tot">${nf.format(ut.get(u))}</td><td class="tot">${ud(u)}</td><td class="tot">${nf1.format(up(u))}</td></tr>`});
+ h+='</tbody><tfoot><tr><td>Total</td>'+areas.map(a=>`<td>${nf.format(at.get(a))}</td>`).join('')+`<td class="tot">${nf.format(tot)}</td><td class="tot">${pd.size}</td><td class="tot" title="Total ÷ suma de días trabajados de todos los usuarios">${nf1.format(udsum?tot/udsum:0)}</td></tr></tfoot>`;
  el.innerHTML=h}
 // gráfico de columnas en SVG; items: {x (etiqueta eje), v (valor), lo (atenuado), tip:[título, líneas...]}
 function niceStep(raw){if(raw<=0)return 1;const p=Math.pow(10,Math.floor(Math.log10(raw))),f=raw/p;return(f<=1?1:f<=2?2:f<=2.5?2.5:f<=5?5:10)*p}
@@ -327,7 +331,7 @@ function draw(){
  let luShown=lu;
  if(uarea){luShown=aggD(UAd.filter(x=>x[0]===uarea).map(x=>[x[1],x[2],x[3]]));$('usub').textContent=`Solo área ${uarea} · promedio = líneas ÷ días en que picó en esa área`}
  else $('usub').textContent='Suma de todas las áreas · promedio = líneas ÷ días en que picó';
- listD($('ls'),ls,ssort);list($('la'),la);listD($('lu'),luShown,usort);matrix(UA);
+ listD($('ls'),ls,ssort);list($('la'),la);listD($('lu'),luShown,usort);matrix(UAd);
  charts(ds,sel_ds);
  const tot=S.reduce((s,r)=>s+r[1],0),utot=lu.reduce((s,r)=>s+r[1],0);
  $('rng').textContent=`Datos cargados del ${fmtY(ds[0])} al ${fmtY(ds[ds.length-1])} · ${ds.length} días`;
