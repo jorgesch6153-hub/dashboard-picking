@@ -46,6 +46,13 @@ input[type=file]{position:absolute;opacity:0;width:1px;height:1px}
 .kpi b{display:block;font-size:1.65rem;line-height:1.15;margin-top:4px;letter-spacing:-.02em;font-weight:700}
 .kpi.main{background:var(--acc);border-color:var(--acc);color:var(--acc-ink)}
 .kpi.main span{color:var(--acc-ink);opacity:.85}
+.kpi small{display:block;color:var(--mut);font-size:.74rem;margin-top:3px;line-height:1.3}
+.kpi.main small{color:var(--acc-ink);opacity:.9}
+.grp{margin:26px 0 10px}.grp h2{font-size:1.15rem}.grp p{margin:2px 0 0;color:var(--mut);font-size:.82rem;max-width:900px}
+#hu td.w{color:var(--warn);font-weight:700}
+#hu .up{color:var(--ok);font-weight:600}#hu .dn{color:var(--warn);font-weight:600}
+#hu td.m{color:var(--mut)}
+#hu tfoot td{position:sticky;bottom:0;background:var(--card);z-index:1}#hu tfoot td:first-child{z-index:2}#hu tfoot td.tot{background:var(--soft)}
 /* mensajes de verificación */
 .msg{display:flex;gap:8px;align-items:flex-start;font-size:.85rem;margin:0 0 10px;padding:9px 12px;border-radius:10px;background:var(--card);border:1px solid var(--line);color:var(--mut)}
 .msg::before{content:"";flex:none;width:1.1rem;height:1.1rem;border-radius:50%;margin-top:1px;background:var(--line)}
@@ -163,6 +170,22 @@ footer{max-width:1240px;margin:0 auto;padding:0 16px 30px;color:var(--mut);font-
  <section><div class="tools"><div><h2>Usuarios</h2><p id="usub">Suma de todas las áreas · promedio = líneas ÷ días en que picó</p></div><div class="sels"><select id="ua" aria-label="Filtrar por área"><option value="">Todas las áreas</option></select><select id="us" aria-label="Ordenar usuarios"><option value="t">Ordenar por líneas</option><option value="p">Ordenar por promedio/día</option></select></div></div><ol id="lu"></ol></section>
  <section class="full"><div class="tools"><div><h2>Usuario × área</h2><p>Líneas picadas por cada usuario en cada área · color más intenso = más líneas · recuadro = área donde más picó · Prom./día = total de todas las áreas ÷ días en que picó en el período elegido</p></div><select id="ms" aria-label="Ordenar tabla"><option value="t">Ordenar por total</option><option value="p">Ordenar por promedio/día</option><option value="n">Ordenar por nombre</option></select></div><div class="tw"><table id="mx"></table></div></section>
 </div>
+<div class="grp"><h2>Horas de picking</h2><p id="hsub"></p></div>
+<div class="kpis">
+ <div class="kpi main"><span>Líneas por hora</span><b id="h1">–</b><small id="h1s"></small></div>
+ <div class="kpi"><span>Horas de picking por día</span><b id="h2">–</b><small id="h2s"></small></div>
+ <div class="kpi"><span>Inicio promedio</span><b id="h3">–</b><small>hora de la primera línea</small></div>
+ <div class="kpi"><span>Fin promedio</span><b id="h4">–</b><small>hora de la última línea</small></div>
+ <div class="kpi"><span>Días que pasaron las 17:00</span><b id="h5">–</b><small id="h5s"></small></div>
+</div>
+<p id="msg3" class="msg"></p>
+<div class="grid">
+ <section class="full"><div class="tools"><div><h2>Productividad por usuario</h2><p>Prom. líneas/día = líneas ÷ días que picó · Líneas/hora = líneas ÷ horas de los días medidos (100 líneas o más) · vs anterior = cambio en líneas/hora contra el período anterior</p></div><select id="hs" aria-label="Ordenar productividad"><option value="l">Ordenar por líneas/hora</option><option value="t">Ordenar por líneas</option><option value="p">Ordenar por prom. líneas/día</option><option value="h">Ordenar por horas/día</option><option value="n">Ordenar por nombre</option></select></div><div class="tw"><table id="hu"></table></div></section>
+ <section class="full"><h2>Líneas por hora, por día</h2><p>Ritmo de todo el equipo cada día del período</p><div class="chart" id="hd"></div>
+  <div class="legend"><span><i style="background:var(--acc)"></i>Líneas por hora del día</span><span><i class="line"></i>Líneas por hora del período</span></div></section>
+ <section><h2>Tendencia semanal de líneas por hora</h2><p>Todas las semanas cargadas con horas · resaltado = período elegido</p><div class="chart" id="hw"></div></section>
+ <section><h2>Líneas según la hora del día</h2><p>Promedio por día del período · muestra los picos y el almuerzo</p><div class="chart" id="hh"></div></section>
+</div>
 </main>
 <footer id="foot">Acceso con clave. Solo el encargado puede cargar datos.</footer>
 <div id="tip" role="tooltip"></div>
@@ -173,7 +196,7 @@ footer{max-width:1240px;margin:0 auto;padding:0 16px 30px;color:var(--mut);font-
  <input type="password" id="kk" autocomplete="off" aria-label="Clave de carga" placeholder="Clave de carga">
  <div class="err" id="ke"></div><div class="row"><button type="button" id="kc">Cancelar</button><button class="pri" type="submit">Continuar</button></div></form></dialog>
 <script>
-let D={},sel=null,usort='t',ssort='t',uarea='',msort='t';
+let D={},sel=null,usort='t',ssort='t',uarea='',msort='t',hsort='l';
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const nf=new Intl.NumberFormat('es'),nf1=new Intl.NumberFormat('es',{maximumFractionDigits:1});
@@ -196,25 +219,40 @@ const MAP={'x sucursal':'s','x usuario':'u','x area':'a','usuario x area':'ua'};
 const blank=()=>({s:[],u:[],a:[],ua:[]});
 // Reporte detallado (una fila = una línea picada): columnas Fecha, usuario, Sucursal Dest, Area
 const norm=s=>String(s??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase();
-const RAWCOLS={d:['fecha'],u:['usuario'],s:['sucursal dest','sucursal destino','sucursal'],a:['area']};
+const RAWCOLS={d:['fecha'],u:['usuario'],s:['sucursal dest','sucursal destino','sucursal'],a:['area'],h:['hora']}; // h (hora) es opcional
+// hora del Excel -> minutos desde las 00:00 (con segundos); null si no es una hora válida
+function minutos(v){
+ if(typeof v==='number'&&Number.isFinite(v)&&v>=0){if(v>=1&&Number.isInteger(v))return null;return Math.round((v-Math.floor(v))*86400)/60}
+ if(v instanceof Date)return v.getHours()*60+v.getMinutes()+v.getSeconds()/60;
+ const m=String(v??'').trim().match(/(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([ap])?\.?\s*m?\.?$/i);
+ if(!m)return null;let h=+m[1];const mi=+m[2],se=+(m[3]||0);
+ if(m[4]){const pm=/p/i.test(m[4]);if(h===12)h=pm?12:0;else if(pm)h+=12}
+ if(h>23||mi>59||se>59)return null;return h*60+mi+se/60}
 function rawHeader(rows){
  for(let i=0;i<Math.min(rows.length,15);i++){
   const h=(rows[i]||[]).map(norm),ix={};
   for(const[k,names]of Object.entries(RAWCOLS)){for(const nm of names){const j=h.indexOf(nm);if(j>=0){ix[k]=j;break}}}
-  if(Object.keys(ix).length===4)return{row:i,ix}}
+  if(['d','u','s','a'].every(k=>k in ix))return{row:i,ix}}
  return null}
 function parseRaw(rows,hd){
  const cnt={s:new Map(),u:new Map(),a:new Map(),ua:new Map()};let skip=0,n=0;
+ const hasH=hd.ix.h!==undefined,hu=new Map(),hh=new Map();let hskip=0; // horas: [inicio, fin, líneas] por día y usuario; líneas por hora del día
  const inc=(m,k)=>m.set(k,(m.get(k)||0)+1);
  for(let i=hd.row+1;i<rows.length;i++){
   const r=rows[i];if(!r||!r.length)continue;
   const d=iso(r[hd.ix.d]),u=String(r[hd.ix.u]??'').trim(),su=String(r[hd.ix.s]??'').trim(),a=String(r[hd.ix.a]??'').trim();
   if(!d&&!u&&!su&&!a)continue;
   if(!d||!u||!su||!a){skip++;continue}
-  n++;inc(cnt.s,d+'\u0001'+su);inc(cnt.u,d+'\u0001'+u);inc(cnt.a,d+'\u0001'+a);inc(cnt.ua,d+'\u0001'+a+'\u0001'+u)}
+  n++;inc(cnt.s,d+'\u0001'+su);inc(cnt.u,d+'\u0001'+u);inc(cnt.a,d+'\u0001'+a);inc(cnt.ua,d+'\u0001'+a+'\u0001'+u);
+  if(hasH){const t=minutos(r[hd.ix.h]);
+   if(t===null)hskip++;
+   else{const k=d+'\u0001'+u,o=hu.get(k);if(o){if(t<o[0])o[0]=t;if(t>o[1])o[1]=t;o[2]++}else hu.set(k,[t,t,1]);inc(hh,d+'\u0001'+Math.floor(t/60))}}}
  const byDate={};
  for(const k of['s','u','a','ua'])for(const[key,v]of cnt[k]){const p=key.split('\u0001');(byDate[p[0]]=byDate[p[0]]||blank())[k].push([...p.slice(1),v])}
- return{byDate,skip:{s:skip,u:0,a:0,ua:0},raw:n}}
+ const sec=x=>Math.round(x*60); // se guardan segundos enteros desde las 00:00 (exacto, igual que el WMS)
+ for(const[key,o]of hu){const p=key.split('\u0001');const day=byDate[p[0]];(day.h=day.h||[]).push([p[1],sec(o[0]),sec(o[1]),o[2]])}
+ for(const[key,v]of hh){const p=key.split('\u0001');const day=byDate[p[0]];(day.hh=day.hh||[]).push([+p[1],v])}
+ return{byDate,skip:{s:skip,u:0,a:0,ua:0},raw:n,hasH,hskip}}
 function parseWb(wb){
  for(const n of wb.SheetNames){
   if(MAP[n.trim().toLowerCase()])continue;
@@ -302,6 +340,75 @@ function charts(ds,sel_ds){
  const wk=new Map();ds.forEach(d=>{const m=mon(d),o=wk.get(m)||{t:0,n:0,hi:false};o.t+=dayTot(d);o.n++;if(inSel(d))o.hi=true;wk.set(m,o)});
  const wi=[...wk].sort((a,b)=>a[0]<b[0]?-1:1).map(([m,o])=>({x:dm(m),v:o.t,lo:sel!=='all'&&!o.hi,tip:[`Semana ${fmt(m)} – ${fmt(add(m,6))}`,`${nf.format(o.t)} líneas`,`${o.n} ${o.n===1?'día':'días'} con datos · ${nf1.format(o.t/o.n)} por día`]}));
  colChart($('cw'),wi,0)}
+// ===== Horas de picking =====
+// Criterios (cambiar aquí si cambia la regla): meta de horas por día, hora límite, mínimo de líneas para medir horas, almuerzo
+const HCFG={meta:8,limite:17*60,minLineas:100,almuerzo:30,almIni:12*60,almFin:13*60};
+const hmT=v=>{const m=Math.floor(v+1e-9);return`${Math.floor(m/60)}:${String(m%60).padStart(2,'0')}`};
+const hRows=days=>{const R=[];days.forEach(d=>(D[d].h||[]).forEach(([u,a,b,n])=>R.push({u,d,a:a/60,b:b/60,n})));return R}; // a,b en minutos
+const hrs=r=>Math.max(0,r.b-r.a-(r.a<HCFG.almIni&&r.b>HCFG.almFin?HCFG.almuerzo:0))/60;
+const okH=r=>r.n>=HCFG.minLineas;
+function lph(R){const V=R.filter(okH),h=V.reduce((s,r)=>s+hrs(r),0);return h>0?V.reduce((s,r)=>s+r.n,0)/h:null}
+function prevPer(ds){
+ if(!sel||sel==='all')return null;
+ if(sel[0]==='w'){const w=add(sel.slice(2),-7);return{lbl:'semana anterior',de:'de la semana anterior',ds:ds.filter(d=>mon(d)===w)}}
+ const[y,m]=sel.slice(2).split('-').map(Number),p=m===1?`${y-1}-12`:`${y}-${String(m-1).padStart(2,'0')}`;
+ return{lbl:'mes anterior',de:'del mes anterior',ds:ds.filter(d=>d.slice(0,7)===p)}}
+function horas(ds,sel_ds){
+ $('hsub').textContent=`Horas de cada usuario por día = de su primera a su última línea, menos ${HCFG.almuerzo} min de almuerzo si picó antes de las 12:00 y después de las 13:00. Las horas, el inicio, el fin y las líneas por hora solo cuentan los días con ${HCFG.minLineas} líneas o más; los días que pasaron las 17:00 cuentan todos los días.`;
+ const R=hRows(sel_ds),V=R.filter(okH),pv=prevPer(ds),set=(id,t)=>{$(id).textContent=t};
+ const avg=(A,f)=>A.length?A.reduce((s,x)=>s+f(x),0)/A.length:null;
+ // tarjetas
+ const L=lph(R),Lp=pv?lph(hRows(pv.ds)):null;
+ set('h1',L==null?'–':nf1.format(L));
+ set('h1s',L==null?'':!pv?'todo el período':Lp==null?`sin horas ${pv.de}`:`${L>=Lp?'▲':'▼'} ${nf1.format(Math.abs(L-Lp))} vs ${pv.lbl} (${nf1.format(Lp)})`);
+ const aH=avg(V,hrs);
+ set('h2',aH==null?'–':nf1.format(aH)+' h');
+ set('h2s',`meta ${HCFG.meta} h`+(V.length?` · ${V.filter(r=>hrs(r)>=HCFG.meta).length} de ${V.length} días-usuario la alcanzaron`:''));
+ const aI=avg(V,r=>r.a),aF=avg(V,r=>r.b);set('h3',aI==null?'–':hmT(aI));set('h4',aF==null?'–':hmT(aF));
+ const OT=R.filter(r=>r.b>HCFG.limite),dH=new Set(R.map(r=>r.d)).size,dOT=new Set(OT.map(r=>r.d)).size;
+ set('h5',R.length?String(dOT):'–');
+ set('h5s',!R.length?'':OT.length?`de ${dH} días · ${OT.length} ${OT.length===1?'día-usuario':'días-usuario'} · la más tarde a las ${hmT(Math.max(...OT.map(r=>r.b)))}`:`de ${dH} días · nadie picó después de las 17:00`);
+ // control: días sin horas y líneas con hora vs total del día
+ const tu=a=>(a||[]).reduce((s,x)=>s+x[x.length-1],0);
+ const sinH=sel_ds.filter(d=>!(D[d].h||[]).length&&tu(D[d].u)>0);
+ const dif=sel_ds.filter(d=>(D[d].h||[]).length&&tu(D[d].h)!==tu(D[d].u));
+ const m3=$('msg3'),parts=[];
+ if(sinH.length)parts.push(`${sinH.length===sel_ds.length?'Ningún día':sinH.length+(sinH.length===1?' día':' días')} de este período ${sinH.length===1?'no tiene':'no tienen'} horas${sinH.length<=12?' ('+sinH.map(fmt).join(', ')+')':''}: volvé a cargar el reporte detallado con la columna Hora`);
+ if(dif.length)parts.push(`Líneas con hora distintas del total en ${dif.map(d=>`${fmt(d)} (${nf.format(tu(D[d].h))} de ${nf.format(tu(D[d].u))})`).join(', ')}`);
+ if(parts.length){m3.className='msg warn';m3.textContent=parts.join(' · ')}
+ else if(R.length){m3.className='msg ok';m3.textContent=`Verificado: cada día, las líneas con hora suman lo mismo que el total por usuario (${nf.format(tu(R.map(r=>[r.n])))} líneas).`}
+ else{m3.className='msg';m3.textContent=''}
+ // tabla por usuario
+ const el=$('hu');
+ if(!R.length){el.innerHTML='<tbody><tr><td style="position:static;font-weight:400;color:var(--mut)">Sin horas en este período. Cargá el reporte detallado del WMS con la columna Hora.</td></tr></tbody>';}
+ else{
+  const by=new Map(),pb=new Map();
+  R.forEach(r=>{if(!by.has(r.u))by.set(r.u,[]);by.get(r.u).push(r)});
+  if(pv)hRows(pv.ds).forEach(r=>{if(!pb.has(r.u))pb.set(r.u,[]);pb.get(r.u).push(r)});
+  const rows=[...by].map(([u,A])=>{const v=A.filter(okH),n=A.reduce((s,r)=>s+r.n,0),l=lph(A),lp=pb.has(u)?lph(pb.get(u)):null;
+   return{u,dias:A.length,n,pd:n/A.length,med:v.length,h:avg(v,hrs),l,dl:l!=null&&lp!=null?l-lp:null,ini:avg(v,r=>r.a),fin:avg(v,r=>r.b),ot:A.filter(r=>r.b>HCFG.limite).length}});
+  const key={l:'l',t:'n',p:'pd',h:'h'}[hsort];
+  rows.sort(hsort==='n'?(x,y)=>x.u.localeCompare(y.u):(x,y)=>(y[key]??-1)-(x[key]??-1)||x.u.localeCompare(y.u));
+  const f1=v=>v==null?'–':nf1.format(v),dlt=v=>v==null?'<td class="m">–</td>':`<td class="${v>=0?'up':'dn'}">${v>=0?'▲':'▼'} ${nf1.format(Math.abs(v))}</td>`;
+  const tN=R.reduce((s,r)=>s+r.n,0);
+  let h=`<thead><tr><th>Usuario</th><th>Días</th><th>Líneas</th><th>Prom. líneas/día</th><th>Días medidos</th><th>Horas/día</th><th class="tot">Líneas/hora</th><th>vs ${pv?pv.lbl:'anterior'}</th><th>Inicio</th><th>Fin</th><th>Días después 17:00</th></tr></thead><tbody>`;
+  rows.forEach(r=>{h+=`<tr><td title="${esc(r.u)}">${esc(r.u)}</td><td>${r.dias}</td><td>${nf.format(r.n)}</td><td>${f1(r.pd)}</td><td${r.med<r.dias?' title="Días con menos de '+HCFG.minLineas+' líneas no se miden"':''}>${r.med}</td><td${r.h!=null&&r.h>HCFG.meta?' class="w"':''}>${f1(r.h)}</td><td class="tot">${f1(r.l)}</td>${dlt(r.dl)}<td>${r.ini==null?'–':hmT(r.ini)}</td><td${r.fin!=null&&r.fin>HCFG.limite?' class="w"':''}>${r.fin==null?'–':hmT(r.fin)}</td><td${r.ot?' class="w"':''}>${r.ot}</td></tr>`});
+  h+=`</tbody><tfoot><tr><td>Total</td><td title="días-usuario">${R.length}</td><td>${nf.format(tN)}</td><td>${f1(tN/R.length)}</td><td>${V.length}</td><td>${f1(aH)}</td><td class="tot">${f1(L)}</td>${dlt(L!=null&&Lp!=null?L-Lp:null)}<td>${aI==null?'–':hmT(aI)}</td><td>${aF==null?'–':hmT(aF)}</td><td>${OT.length}</td></tr></tfoot>`;
+  el.innerHTML=h}
+ // gráfico: líneas por hora por día
+ const di=[];sel_ds.forEach(d=>{const A=hRows([d]),l=lph(A);if(l==null)return;const v=A.filter(okH);
+  di.push({x:dm(d),v:l,tip:[fmtW(d),`${nf1.format(l)} líneas por hora`,`${v.length} usuarios medidos · ${nf1.format(avg(v,hrs))} h por usuario`]})});
+ colChart($('hd'),di,di.length>1&&L!=null?L:0);
+ // gráfico: tendencia semanal
+ const ws=[...new Set(ds.filter(d=>(D[d].h||[]).length).map(mon))].sort(),wi=[];
+ ws.forEach(w=>{const l=lph(hRows(ds.filter(d=>mon(d)===w)));if(l==null)return;wi.push({x:dm(w),v:l,lo:!sel_ds.some(d=>mon(d)===w),tip:[`Semana del ${fmt(w)} al ${fmt(add(w,6))}`,`${nf1.format(l)} líneas por hora`]})});
+ colChart($('hw'),wi,0);
+ // gráfico: líneas según la hora del día (promedio por día)
+ const hd=sel_ds.filter(d=>(D[d].hh||[]).length),acc=new Map();
+ hd.forEach(d=>D[d].hh.forEach(([hr,v])=>acc.set(hr,(acc.get(hr)||0)+v)));
+ const hi=[];if(acc.size){const k=[...acc.keys()],lo=Math.min(...k),hi2=Math.max(...k);
+  for(let hr=lo;hr<=hi2;hr++){const t=acc.get(hr)||0,v=t/hd.length;hi.push({x:`${hr}h`,v,tip:[`De ${hr}:00 a ${hr}:59`,`${nf.format(Math.round(v))} líneas por día en promedio`,`${nf.format(t)} líneas en ${hd.length} ${hd.length===1?'día':'días'}`]})}}
+ colChart($('hh'),hi,0)}
 function opts(){
  const ds=Object.keys(D).sort();
  const dl=n=>`${n} ${n===1?'día':'días'}`;
@@ -312,7 +419,7 @@ function opts(){
 const inSel=d=>sel==='all'||(sel[0]==='w'?mon(d)===sel.slice(2):d.slice(0,7)===sel.slice(2));
 function draw(){
  const ds=Object.keys(D).sort();
- if(!ds.length){$('msg').className='msg';$('msg').textContent='Sin datos todavía. Cargá el Excel.';$('msg2').textContent='';['la','ls','lu','mx','cdt'].forEach(id=>$(id).innerHTML='');['cd','cw'].forEach(id=>$(id).innerHTML='<div class="empty">Sin datos</div>');['k1','k2','k3','k4','k5','k6'].forEach(id=>$(id).textContent='–');$('rng').textContent='';return}
+ if(!ds.length){$('msg').className='msg';$('msg').textContent='Sin datos todavía. Cargá el Excel.';$('msg2').textContent='';['la','ls','lu','mx','cdt'].forEach(id=>$(id).innerHTML='');['cd','cw'].forEach(id=>$(id).innerHTML='<div class="empty">Sin datos</div>');['k1','k2','k3','k4','k5','k6'].forEach(id=>$(id).textContent='–');$('rng').textContent='';horas(ds,[]);return}
  const O=opts();
  if(sel!=='all'&&!O.some(o=>o[0]===sel))sel=O[0][0];
  const grp=(p,l)=>`<optgroup label="${l}">`+O.filter(o=>o[0].startsWith(p)).map(o=>`<option value="${o[0]}">${o[1]}</option>`).join('')+'</optgroup>';
@@ -332,7 +439,7 @@ function draw(){
  if(uarea){luShown=aggD(UAd.filter(x=>x[0]===uarea).map(x=>[x[1],x[2],x[3]]));$('usub').textContent=`Solo área ${uarea} · promedio = líneas ÷ días en que picó en esa área`}
  else $('usub').textContent='Suma de todas las áreas · promedio = líneas ÷ días en que picó';
  listD($('ls'),ls,ssort);list($('la'),la);listD($('lu'),luShown,usort);matrix(UAd);
- charts(ds,sel_ds);
+ charts(ds,sel_ds);horas(ds,sel_ds);
  const tot=S.reduce((s,r)=>s+r[1],0),utot=lu.reduce((s,r)=>s+r[1],0);
  $('rng').textContent=`Datos cargados del ${fmtY(ds[0])} al ${fmtY(ds[ds.length-1])} · ${ds.length} días`;
  $('k1').textContent=nf.format(tot);
@@ -358,6 +465,7 @@ $('us').onchange=e=>{usort=e.target.value;draw()};
 $('ss').onchange=e=>{ssort=e.target.value;draw()};
 $('ua').onchange=e=>{uarea=e.target.value;draw()};
 $('ms').onchange=e=>{msort=e.target.value;draw()};
+$('hs').onchange=e=>{hsort=e.target.value;draw()};
 $('wk').onchange=e=>{sel=e.target.value;draw()};
 // redibujar los gráficos al cambiar el ancho de la ventana
 let rz=0,lastW=innerWidth;addEventListener('resize',()=>{if(innerWidth===lastW)return;lastW=innerWidth;clearTimeout(rz);rz=setTimeout(()=>{if(Object.keys(D).length)draw()},150)});
@@ -408,16 +516,20 @@ $('f').onchange=async e=>{
  for(const f of files){
   try{
    $('lblt').textContent=`Leyendo ${f.name}…`;await new Promise(r=>setTimeout(r,30));
-   const{byDate,skip,raw}=parseWb(XLSX.read(await f.arrayBuffer(),{type:'array',cellDates:false,dense:true}));
+   const{byDate,skip,raw,hasH,hskip}=parseWb(XLSX.read(await f.arrayBuffer(),{type:'array',cellDates:false,dense:true}));
    const dates=Object.keys(byDate);
    if(!dates.length){msgs.push(`${f.name}: no se reconoce. Debe ser el reporte detallado (columnas Fecha, usuario, Sucursal Dest, Area) o tener las hojas "x sucursal", "x usuario", "x area", "usuario x area".`);continue}
    Object.assign(allDays,byDate);
    const o=skip.s+skip.u+skip.a+skip.ua;
    const sinUA=dates.filter(d=>!byDate[d].ua.length).length;
-   if(raw!==undefined){msgs.push(`${f.name}: reporte detallado, ${nf.format(raw)} líneas en ${dates.length} día(s)`+(skip.s?`, ${skip.s} filas omitidas por datos incompletos`:''));continue}
+   if(raw!==undefined){msgs.push(`${f.name}: reporte detallado, ${nf.format(raw)} líneas en ${dates.length} día(s)`+(skip.s?`, ${skip.s} filas omitidas por datos incompletos`:'')+
+    (!hasH?' · sin columna Hora: esos días quedan sin horas de picking':hskip?` · ${nf.format(hskip)} líneas sin hora válida (no cuentan en las horas)`:' · con horas de picking'));continue}
    msgs.push(`${f.name}: ${dates.length} día(s) leídos`+(o?`, ${o} filas omitidas por datos inválidos`:'')+(sinUA?`, ${sinUA} día(s) sin hoja "usuario x area"`:''))
   }catch(err){msgs.push(`${f.name}: error al leer (${err.message})`)}}
  if(Object.keys(allDays).length){
+  const tu=a=>(a||[]).reduce((s,x)=>s+x[x.length-1],0),cmp=[];
+  Object.keys(allDays).sort().forEach(d=>{if(D[d]&&tu(D[d].u)!==tu(allDays[d].u))cmp.push(`${fmt(d)}: ${nf.format(tu(D[d].u))} → ${nf.format(tu(allDays[d].u))}`)});
+  if(cmp.length)msgs.push(`Días que cambiaron respecto de lo ya cargado (líneas antes → ahora): ${cmp.join(' · ')}`);
   try{
    const r=await fetch('/api/data',{method:'POST',headers:{'content-type':'application/json','x-upload-key':UK},body:JSON.stringify({days:allDays})});
    const j=await r.json().catch(()=>({}));
