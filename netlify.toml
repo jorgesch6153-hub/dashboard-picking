@@ -9,3 +9,4 @@
   [headers.values]
     X-Robots-Tag = "noindex, nofollow"
     Referrer-Policy = "no-referrer"
+    
