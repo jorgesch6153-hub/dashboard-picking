@@ -274,8 +274,8 @@ footer{max-width:1320px;margin:0 auto;padding:6px 16px calc(28px + env(safe-area
 <!-- ================= CARGA ================= -->
 <div class="panel" data-p="carga" role="tabpanel" aria-labelledby="t-carga" hidden>
 <div class="upl">
- <section><h2>Subir reporte</h2><p>Reporte detallado del WMS (columnas Fecha, usuario, Sucursal Dest, Area y, si se quiere medir horas, Hora) o Excel resumen con las hojas "x sucursal", "x usuario", "x area" y "usuario x area". Se puede elegir más de un archivo.</p>
-  <div class="drop" id="drop"><label class="btn" id="lbl"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 20h16"/></svg><span id="lblt">Elegir Excel</span><input type="file" id="f" accept=".xlsx,.xls" multiple></label><p>o arrastrá los archivos aquí</p></div>
+ <section><h2>Subir reporte</h2><p>Reporte detallado del WMS (columnas Fecha, usuario, Sucursal Dest, Area y, si se quiere medir horas, Hora) o Excel resumen con las hojas "x sucursal", "x usuario", "x area" y "usuario x area". Se puede elegir más de un archivo. También acepta un respaldo (.json) descargado desde "Datos cargados".</p>
+  <div class="drop" id="drop"><label class="btn" id="lbl"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 20h16"/></svg><span id="lblt">Elegir Excel</span><input type="file" id="f" accept=".xlsx,.xls,.json" multiple></label><p>o arrastrá los archivos aquí</p></div>
   <p id="upst" class="msg" style="margin-top:12px"></p>
   <div id="pend" hidden>
    <h2 style="margin-top:6px">Revisión antes de guardar</h2>
@@ -284,7 +284,8 @@ footer{max-width:1320px;margin:0 auto;padding:6px 16px calc(28px + env(safe-area
    <div class="row"><button type="button" class="sec" id="upc">Cancelar</button><button type="button" class="pri ac" id="upg">Guardar</button></div>
   </div></section>
  <section><h2>Datos cargados</h2><p id="csub">Resumen por mes de lo que ya está guardado</p><div class="tw"><table id="cm"></table></div>
-  <p style="margin-top:8px">Días con horas = días cargados con el reporte detallado que trae la columna Hora. Los días sin horas no aparecen en la pestaña Horas hasta volver a cargarlos.</p></section>
+  <p style="margin-top:8px">Días con horas = días cargados con el reporte detallado que trae la columna Hora. Los días sin horas no aparecen en la pestaña Horas hasta volver a cargarlos.</p>
+  <div class="row" style="justify-content:flex-start;align-items:center"><button type="button" class="sec" id="bk">Descargar respaldo</button><span style="color:var(--mut);font-size:.8rem">Archivo .json con todos los días guardados. Para recuperarlos o pasarlos a otro sitio, se carga en "Subir reporte".</span></div></section>
 </div>
 </div>
 </main>
@@ -708,6 +709,14 @@ async function readFiles(files){
  for(const f of files){
   try{
    $('lblt').textContent=`Leyendo ${f.name}…`;await new Promise(r=>setTimeout(r,30));
+   if(/\.json$/i.test(f.name)){
+    // respaldo descargado con "Descargar respaldo": se guarda tal cual (el servidor lo vuelve a validar)
+    let j;try{j=JSON.parse(await f.text())}catch{msgs.push(`${f.name}: no es un respaldo válido (JSON dañado).`);continue}
+    const dd=j&&j.days&&typeof j.days==='object'&&!Array.isArray(j.days)?j.days:null,ks=dd?Object.keys(dd).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)&&dd[k]&&typeof dd[k]==='object'):[];
+    if(!ks.length){msgs.push(`${f.name}: no es un respaldo del dashboard de picking.`);continue}
+    ks.forEach(k=>{allDays[k]=dd[k]});
+    const tl=ks.reduce((s,k)=>s+(dd[k].u||[]).reduce((a,x)=>a+x[x.length-1],0),0);
+    msgs.push(`${f.name}: respaldo${j.exported?' del '+fmtY(String(j.exported).slice(0,10)):''}, ${ks.length} día(s), ${nf.format(tl)} líneas`+(j.total&&j.total.lineas!==tl?` · ATENCIÓN: el archivo dice ${nf.format(j.total.lineas)} líneas`:'')+(j.total&&j.total.dias!==ks.length?` · ATENCIÓN: el archivo dice ${j.total.dias} días`:''));continue}
    const{byDate,skip,raw,hasH,hskip}=parseWb(XLSX.read(await f.arrayBuffer(),{type:'array',cellDates:false,dense:true}));
    const dates=Object.keys(byDate);
    if(!dates.length){msgs.push(`${f.name}: no se reconoce. Debe ser el reporte detallado (columnas Fecha, usuario, Sucursal Dest, Area) o tener las hojas "x sucursal", "x usuario", "x area", "usuario x area".`);continue}
@@ -734,7 +743,16 @@ $('f').onchange=async e=>{const files=[...e.target.files];e.target.value='';awai
 const dz=$('drop');
 ['dragenter','dragover'].forEach(t=>dz.addEventListener(t,e=>{e.preventDefault();if(UK)dz.classList.add('over')}));
 ['dragleave','drop'].forEach(t=>dz.addEventListener(t,e=>{e.preventDefault();dz.classList.remove('over')}));
-dz.addEventListener('drop',e=>{if(!UK){askKey();return}readFiles([...e.dataTransfer.files].filter(f=>/\.xlsx?$/i.test(f.name)))});
+dz.addEventListener('drop',e=>{if(!UK){askKey();return}readFiles([...e.dataTransfer.files].filter(f=>/\.(xlsx?|json)$/i.test(f.name)))});
+// respaldo: todos los días guardados, tal como los entrega el servidor
+$('bk').onclick=()=>{
+ const ks=Object.keys(D).sort();if(!ks.length){st('warn','No hay datos guardados para respaldar.');return}
+ const lin=ks.reduce((s,k)=>s+(D[k].u||[]).reduce((a,x)=>a+x[x.length-1],0),0);
+ const body=JSON.stringify({app:'dashboard-picking',version:1,exported:new Date().toISOString(),sitio:location.host,total:{dias:ks.length,lineas:lin,desde:ks[0],hasta:ks[ks.length-1]},days:D});
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([body],{type:'application/json'}));
+ a.download=`respaldo-picking-${new Date().toISOString().slice(0,10)}.json`;document.body.appendChild(a);a.click();
+ setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);
+ st('ok',`Respaldo descargado: ${ks.length} días, ${nf.format(lin)} líneas, del ${fmtY(ks[0])} al ${fmtY(ks[ks.length-1])}.`)};
 $('upc').onclick=()=>{pending=null;$('pend').hidden=true;st('','')};
 $('upg').onclick=async()=>{
  if(!pending)return;const n=Object.keys(pending).length;
