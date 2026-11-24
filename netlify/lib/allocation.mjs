@@ -9,6 +9,7 @@
 //  - % avance = picadas ÷ (picadas + pendientes), total y por área.
 //  - Filas idénticas en todas sus columnas: se cuentan todas (como las muestra el WMS) y se avisan.
 //  - Historial: solo líneas Finalizada de AREAS, en el día de su "Hora de selección".
+//  - Ritmo (24-nov-2026): líneas picadas por área en la última hora antes del reporte, para estimar la hora de término.
 //  - Sucursal × área (24-nov-2026): picadas y pendientes por Sucursal Dest en cada área, con las mismas líneas que el avance por área.
 
 export const AREAS = ["LP1", "LP2", "RK", "CG", "CF"];
@@ -103,6 +104,8 @@ export function leerAllocation(text) {
   const area = new Map();          // área -> {fin, asig, inic}
   const au = new Map();            // área\u0001usuario -> {n, ult}
   const sucA = new Map();          // sucursal\u0001área -> {fin, asig, inic}
+  const r60 = new Map();           // área -> líneas picadas en los 60 min antes de la hora del reporte
+  let primera = null;              // hora de la primera línea picada del día (segundos)
   const otras = new Map();         // área ajena -> {fin, pend}
   const estadosRaros = new Map();  // estado desconocido -> filas
   const finOtroDia = new Map();    // fecha -> líneas Finalizada de otro día (no cuentan en el avance)
@@ -143,6 +146,11 @@ export function leerAllocation(text) {
     S[tipo]++;
     sucA.set(sk, S);
     if (tipo !== "fin") continue;
+    // ritmo (24-nov-2026): picadas con hora de selección del día, en (hora del reporte − 60 min, hora del reporte]
+    if (hs) {
+      if (primera === null || hs.s < primera) primera = hs.s;
+      if (hs.s > ts.s - 3600 && hs.s <= ts.s) inc(r60, ar);
+    }
 
     if (!user) { finSinUsuario++; continue; }
     const k = ar + "\u0001" + user;
@@ -183,6 +191,8 @@ export function leerAllocation(text) {
     fin, tot, pend: tot - fin,
     areas, ops,
     // [sucursal, área, picadas, asignadas, iniciadas]; pendiente = asignadas + iniciadas (desde 24-nov-2026; reportes anteriores no lo traen)
+    // ritmo para la hora estimada de término: ven = segundos de la ventana (60 min, o menos si el picking empezó hace menos de una hora)
+    ritmo: { ven: primera === null ? 0 : Math.max(0, Math.min(3600, ts.s - primera)), a: AREAS.filter((a) => area.has(a)).map((a) => [a, r60.get(a) || 0]) },
     suc: [...sucA].map(([k, o]) => { const [sc, a] = k.split("\u0001"); return [sc, a, o.fin, o.asig, o.inic]; })
       .sort((x, y) => x[0].localeCompare(y[0], "es", { numeric: true }) || AREAS.indexOf(x[1]) - AREAS.indexOf(y[1])),
     otras: [...otras].map(([a, o]) => ({ area: a, ...o })).sort((x, y) => (y.fin + y.pend + y.otro) - (x.fin + x.pend + x.otro)),
