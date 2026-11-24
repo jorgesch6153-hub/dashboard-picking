@@ -9,6 +9,7 @@
 //  - % avance = picadas ÷ (picadas + pendientes), total y por área.
 //  - Filas idénticas en todas sus columnas: se cuentan todas (como las muestra el WMS) y se avisan.
 //  - Historial: solo líneas Finalizada de AREAS, en el día de su "Hora de selección".
+//  - Sucursal × área (24-nov-2026): picadas y pendientes por Sucursal Dest en cada área, con las mismas líneas que el avance por área.
 
 export const AREAS = ["LP1", "LP2", "RK", "CG", "CF"];
 
@@ -101,6 +102,7 @@ export function leerAllocation(text) {
 
   const area = new Map();          // área -> {fin, asig, inic}
   const au = new Map();            // área\u0001usuario -> {n, ult}
+  const sucA = new Map();          // sucursal\u0001área -> {fin, asig, inic}
   const otras = new Map();         // área ajena -> {fin, pend}
   const estadosRaros = new Map();  // estado desconocido -> filas
   const finOtroDia = new Map();    // fecha -> líneas Finalizada de otro día (no cuentan en el avance)
@@ -135,6 +137,11 @@ export function leerAllocation(text) {
     const A = area.get(ar) || { fin: 0, asig: 0, inic: 0 };
     A[tipo]++;
     area.set(ar, A);
+    // sucursal × área (mismas líneas que cuenta el área: la suma por sucursal de un área = total del área)
+    const sk = (val(r[ix.suc]) || "(sin sucursal)") + "\u0001" + ar;
+    const S = sucA.get(sk) || { fin: 0, asig: 0, inic: 0 };
+    S[tipo]++;
+    sucA.set(sk, S);
     if (tipo !== "fin") continue;
 
     if (!user) { finSinUsuario++; continue; }
@@ -175,6 +182,9 @@ export function leerAllocation(text) {
     dia, hora: ts.s, filas: data.length,
     fin, tot, pend: tot - fin,
     areas, ops,
+    // [sucursal, área, picadas, asignadas, iniciadas]; pendiente = asignadas + iniciadas (desde 24-nov-2026; reportes anteriores no lo traen)
+    suc: [...sucA].map(([k, o]) => { const [sc, a] = k.split("\u0001"); return [sc, a, o.fin, o.asig, o.inic]; })
+      .sort((x, y) => x[0].localeCompare(y[0], "es", { numeric: true }) || AREAS.indexOf(x[1]) - AREAS.indexOf(y[1])),
     otras: [...otras].map(([a, o]) => ({ area: a, ...o })).sort((x, y) => (y.fin + y.pend + y.otro) - (x.fin + x.pend + x.otro)),
     estadosRaros: ent(estadosRaros),
     finOtroDia: ent(finOtroDia),
