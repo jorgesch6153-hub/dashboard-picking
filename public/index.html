@@ -526,8 +526,9 @@ dialog .card{background:var(--card)}
    <div class="tw" style="margin-top:10px;max-height:46vh"><table id="upd"></table></div>
    <div class="row"><button type="button" class="sec" id="upc">Cancelar</button><button type="button" class="pri ac" id="upg">Guardar</button></div>
   </div></section>
- <section><h2>Informe mensual</h2><p>Excel del mes con las hojas Resumen, Por día, Sucursales, Áreas, Usuarios, Usuario × área, Sucursal por día y Usuario por día. Usa los mismos cálculos que las pestañas Líneas y Horas.</p>
-  <div class="row" style="justify-content:flex-start;margin-top:0"><select id="imes" aria-label="Mes del informe"></select><button type="button" class="pri ac" id="ibtn">Descargar Excel</button></div>
+ <section><h2>Informe del período</h2><p>Elegí un mes o un rango de meses. PDF: dos páginas con gráficos para gerencia (se guarda con "Guardar como PDF" en la ventana de impresión). Excel: el detalle por día, sucursal, área y usuario. Los dos usan los mismos cálculos que las pestañas Líneas y Horas y se comparan con el período anterior del mismo largo.</p>
+  <div class="row" style="justify-content:flex-start;margin-top:0;align-items:center"><label for="imes" style="font-size:.84rem;color:var(--mut)">Desde</label><select id="imes" aria-label="Desde el mes"></select><label for="imes2" style="font-size:.84rem;color:var(--mut)">Hasta</label><select id="imes2" aria-label="Hasta el mes"></select></div>
+  <div class="row" style="justify-content:flex-start"><button type="button" class="pri ac" id="ipdf">Descargar PDF</button><button type="button" class="sec" id="ibtn">Descargar Excel</button></div>
   <p id="ist" class="msg" style="margin-top:12px"></p></section>
  <section><h2>Datos cargados</h2><p id="csub">Resumen por mes de lo que ya está guardado</p><div class="tw"><table id="cm"></table></div>
   <p id="cot" class="msg" style="margin-top:8px"></p>
@@ -895,73 +896,87 @@ function draw(){
  if(parts.length){m2.className='msg warn';m2.textContent='Usuario × área: '+parts.join(' · ')+'. La tabla y el filtro por área no incluyen esos días completos.'}
  else if(sel_ds.length){m2.className='msg ok';m2.textContent='Verificado: "usuario x area" suma lo mismo que "x usuario" cada día.'}
  marcaCarga()}
-// ===== Informe mensual en Excel (pestaña Carga; 24-nov-2026). Usa las mismas cuentas que las pestañas Líneas y Horas. =====
+// ===== Informe del período: PDF (2 páginas A4 horizontales) y Excel (pestaña Carga; 24/25-nov-2026). Usa las mismas cuentas que las pestañas Líneas y Horas. =====
 const mesNom=k=>new Intl.DateTimeFormat('es',{month:'long',year:'numeric',timeZone:'UTC'}).format(T(k+'-01'));
-const mesAnt=k=>{const[y,m]=k.split('-').map(Number);return m===1?`${y-1}-12`:`${y}-${String(m-1).padStart(2,'0')}`};
+const mesCorto=k=>new Intl.DateTimeFormat('es',{month:'long',timeZone:'UTC'}).format(T(k+'-01'));
+const mesSum=(k,n)=>{let[y,m]=k.split('-').map(Number);m+=n;while(m<1){m+=12;y--}while(m>12){m-=12;y++}return`${y}-${String(m).padStart(2,'0')}`};
+const mesAnt=k=>mesSum(k,-1);
+const nMeses=(a,b)=>{const[y1,m1]=a.split('-').map(Number),[y2,m2]=b.split('-').map(Number);return(y2-y1)*12+m2-m1+1};
+// nombre del período: "noviembre de 2026", "septiembre a noviembre de 2026", "diciembre de 2025 a febrero de 2026"
+const perNom=(a,b)=>a===b?mesNom(a):a.slice(0,4)===b.slice(0,4)?`${mesCorto(a)} a ${mesNom(b)}`:`${mesNom(a)} a ${mesNom(b)}`;
 const ist=(cls,t)=>{const m=$('ist');m.className='msg'+(cls?' '+cls:'');m.textContent=t||''};
 function informeMeses(ds){
- const el=$('imes');if(!el)return;const ms=[...new Set(ds.map(d=>d.slice(0,7)))].sort().reverse(),v=el.value;
- el.innerHTML=ms.map(k=>`<option value="${k}">${esc(mesNom(k))} (${ds.filter(d=>d.slice(0,7)===k).length} días)</option>`).join('');
- if(ms.includes(v))el.value=v;$('ibtn').disabled=!ms.length}
-// datos del informe (separado del Excel para poder verificarlo)
-function datosInforme(mes){
- const ds=Object.keys(D).sort(),md=ds.filter(d=>d.slice(0,7)===mes),pds=ds.filter(d=>d.slice(0,7)===mesAnt(mes));
+ const a=$('imes'),b=$('imes2');if(!a||!b)return;const ms=[...new Set(ds.map(d=>d.slice(0,7)))].sort().reverse(),va=a.value,vb=b.value;
+ const o=ms.map(k=>`<option value="${k}">${esc(mesNom(k))} (${ds.filter(d=>d.slice(0,7)===k).length} días)</option>`).join('');
+ a.innerHTML=o;b.innerHTML=o;if(ms.includes(va))a.value=va;if(ms.includes(vb))b.value=vb;
+ $('ibtn').disabled=$('ipdf').disabled=!ms.length}
+const rangoInf=()=>{let a=$('imes').value,b=$('imes2').value;if(a>b)[a,b]=[b,a];return[a,b]};
+// datos del informe (separado del PDF y del Excel para poder verificarlo). Período anterior = la misma cantidad de meses, justo antes.
+function datosInforme(a,b){
+ if(!b)b=a;if(a>b)[a,b]=[b,a];
+ const k=nMeses(a,b),pa=mesSum(a,-k),pb=mesAnt(a),en=(d,x,y)=>{const m=d.slice(0,7);return m>=x&&m<=y};
+ const ds=Object.keys(D).sort(),md=ds.filter(d=>en(d,a,b)),pds=ds.filter(d=>en(d,pa,pb));
  const S=[],U=[],A=[],UAd=[];
  md.forEach(d=>{const r=D[d];S.push(...(r.s||[]).map(x=>[x[0],x[1],d]));U.push(...(r.u||[]).map(x=>[x[0],x[1],d]));A.push(...(r.a||[]).map(x=>[x[0],x[1]]));(r.ua||[]).forEach(x=>UAd.push([x[0],x[1],x[2],d]))});
- const ls=aggD(S).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])),la=agg(A),lu=aggD(U).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
+ const ls=aggD(S).sort((x,y)=>y[1]-x[1]||x[0].localeCompare(y[0])),la=agg(A),lu=aggD(U).sort((x,y)=>y[1]-x[1]||x[0].localeCompare(y[0]));
  const tot=S.reduce((s,r)=>s+r[1],0),utot=lu.reduce((s,r)=>s+r[1],0);
  const ud=new Set(U.filter(r=>r[1]>0).map(r=>r[0]+'|'+r[2])).size;
  const ptot=pds.reduce((s,d)=>s+dayTot(d),0);
  const avg=(X,f)=>X.length?X.reduce((s,x)=>s+f(x),0)/X.length:null;
  const R=hRows(md),V=R.filter(okH),L=lph(R),Lp=pds.length?lph(hRows(pds)):null,OT=R.filter(r=>r.b>HCFG.limite);
- const best=md.reduce((b,d)=>!b||dayTot(d)>b.v?{v:dayTot(d),d}:b,null);
- const dias=md.map(d=>{const A=hRows([d]),v=A.filter(okH);return{d,l:dayTot(d),u:dayUsers(d),s:(D[d].s||[]).length,a:(D[d].a||[]).length,lph:lph(A),med:v.length,h:avg(v,hrs),ini:avg(v,r=>r.a),fin:avg(v,r=>r.b),ot:A.filter(r=>r.b>HCFG.limite).length}});
+ const best=md.reduce((m,d)=>!m||dayTot(d)>m.v?{v:dayTot(d),d}:m,null);
+ const dias=md.map(d=>{const X=hRows([d]),v=X.filter(okH);return{d,l:dayTot(d),u:dayUsers(d),s:(D[d].s||[]).length,a:(D[d].a||[]).length,lph:lph(X),med:v.length,h:avg(v,hrs),ini:avg(v,r=>r.a),fin:avg(v,r=>r.b),ot:X.filter(r=>r.b>HCFG.limite).length}});
  const byU=new Map(),pbU=new Map();R.forEach(r=>{if(!byU.has(r.u))byU.set(r.u,[]);byU.get(r.u).push(r)});hRows(pds).forEach(r=>{if(!pbU.has(r.u))pbU.set(r.u,[]);pbU.get(r.u).push(r)});
  const usuarios=lu.map(([u,n,dd,pd])=>{const H=byU.get(u)||[],v=H.filter(okH),l=lph(H),lp=pbU.has(u)?lph(pbU.get(u)):null;
   return{u,n,dias:dd,pd,med:v.length,h:avg(v,hrs),l,dl:l!=null&&lp!=null?l-lp:null,ini:avg(v,r=>r.a),fin:avg(v,r=>r.b),ot:H.filter(r=>r.b>HCFG.limite).length}});
  // usuario × área (igual que la tabla de la pestaña Líneas)
  const at=new Map(),ut=new Map(),cell=new Map(),udd=new Map();
- UAd.forEach(([a,u,v,d])=>{at.set(a,(at.get(a)||0)+v);ut.set(u,(ut.get(u)||0)+v);const k=u+'\u0001'+a;cell.set(k,(cell.get(k)||0)+v);if(v>0){if(!udd.has(u))udd.set(u,new Set());udd.get(u).add(d)}});
+ UAd.forEach(([ar,u,v,d])=>{at.set(ar,(at.get(ar)||0)+v);ut.set(u,(ut.get(u)||0)+v);const kk=u+'\u0001'+ar;cell.set(kk,(cell.get(kk)||0)+v);if(v>0){if(!udd.has(u))udd.set(u,new Set());udd.get(u).add(d)}});
  const uaAreas=[...at].sort((x,y)=>y[1]-x[1]||x[0].localeCompare(y[0])).map(x=>x[0]);
  const uaUsers=[...ut].sort((x,y)=>y[1]-x[1]||x[0].localeCompare(y[0])).map(x=>x[0]);
- const sum=a=>(a||[]).reduce((s,x)=>s+x[x.length-1],0);
- return{mes,md,pds,tot,ptot,nS:ls.length,nU:lu.length,nA:la.length,pu:lu.length?utot/lu.length:null,pud:ud?utot/ud:null,pdia:md.length?tot/md.length:null,best,
-  L,Lp,aH:avg(V,hrs),aI:avg(V,r=>r.a),aF:avg(V,r=>r.b),dH:new Set(R.map(r=>r.d)).size,dOT:new Set(OT.map(r=>r.d)).size,nOT:OT.length,
+ const sum=x=>(x||[]).reduce((s,y)=>s+y[y.length-1],0);
+ // líneas según la hora del día: promedio por día de los días con horas (igual que el gráfico de la pestaña Horas)
+ const hd=md.filter(d=>(D[d].hh||[]).length),hacc=new Map();hd.forEach(d=>D[d].hh.forEach(([hr,v])=>hacc.set(hr,(hacc.get(hr)||0)+v)));
+ return{a,b,pa,pb,nom:perNom(a,b),pnom:perNom(pa,pb),pcorto:k===1?mesCorto(pa):'período anterior',md,pds,tot,ptot,
+  nS:ls.length,nU:lu.length,nA:la.length,pu:lu.length?utot/lu.length:null,pud:ud?utot/ud:null,pdia:md.length?tot/md.length:null,ppdia:pds.length?ptot/pds.length:null,best,
+  L,Lp,aH:avg(V,hrs),aI:avg(V,r=>r.a),aF:avg(V,r=>r.b),nV:V.length,nMeta:V.filter(r=>hrs(r)>=HCFG.meta).length,dH:new Set(R.map(r=>r.d)).size,dOT:new Set(OT.map(r=>r.d)).size,nOT:OT.length,
   sinH:md.filter(d=>!(D[d].h||[]).length&&sum(D[d].u)>0),difH:md.filter(d=>(D[d].h||[]).length&&sum(D[d].h)!==sum(D[d].u)),
   bad:md.filter(d=>{const r=D[d];return sum(r.s)!==sum(r.u)||sum(r.u)!==sum(r.a)}),noUA:md.filter(d=>!(D[d].ua||[]).length),
-  dias,sucursales:ls,areas:la,usuarios,
-  ua:{areas:uaAreas,users:uaUsers.map(u=>({u,v:uaAreas.map(a=>cell.get(u+'\u0001'+a)||0),t:ut.get(u),d:udd.has(u)?udd.get(u).size:0}))},
-  sxd:ls.map(([k])=>({k,v:md.map(d=>(D[d].s||[]).reduce((t,r)=>t+(r[0]===k?r[1]:0),0))})),
-  uxd:lu.map(([k])=>({k,v:md.map(d=>(D[d].u||[]).reduce((t,r)=>t+(r[0]===k?r[1]:0),0))}))}}
+  dias,sucursales:ls,areas:la,usuarios,hh:{n:hd.length,v:[...hacc].sort((x,y)=>x[0]-y[0])},
+  ua:{areas:uaAreas,users:uaUsers.map(u=>({u,v:uaAreas.map(ar=>cell.get(u+'\u0001'+ar)||0),t:ut.get(u),d:udd.has(u)?udd.get(u).size:0}))},
+  sxd:ls.map(([kk])=>({k:kk,v:md.map(d=>(D[d].s||[]).reduce((t,r)=>t+(r[0]===kk?r[1]:0),0))})),
+  uxd:lu.map(([kk])=>({k:kk,v:md.map(d=>(D[d].u||[]).reduce((t,r)=>t+(r[0]===kk?r[1]:0),0))}))}}
+// ---------- Excel ----------
 // hoja: filas de valores; una celda puede ser [valor, formato]. Fechas = número de serie de Excel; horas = fracción del día.
 function hoja(rows,widths){
  const ws=XLSX.utils.aoa_to_sheet(rows.map(r=>r.map(c=>Array.isArray(c)?c[0]:c)));
- rows.forEach((r,i)=>r.forEach((c,j)=>{if(Array.isArray(c)&&c[1]&&c[0]!=null&&c[0]!==''){const a=XLSX.utils.encode_cell({r:i,c:j});if(ws[a])ws[a].z=c[1]}}));
+ rows.forEach((r,i)=>r.forEach((c,j)=>{if(Array.isArray(c)&&c[1]&&c[0]!=null&&c[0]!==''){const ad=XLSX.utils.encode_cell({r:i,c:j});if(ws[ad])ws[ad].z=c[1]}}));
  if(widths)ws['!cols']=widths.map(w=>({wch:w}));return ws}
 const xF=d=>[Math.round((T(d)-Date.UTC(1899,11,30))/864e5),'dd/mm/yyyy'],xH=m=>m==null?'':[m/1440,'h:mm'],
  xN=v=>v==null?'':[v,'#,##0'],xD=v=>v==null?'':[v,'#,##0.0'],xP=v=>v==null?'':[v,'0.0%'];
-function excelInforme(mes){
- const I=datosInforme(mes),wb=XLSX.utils.book_new(),nm=mesNom(mes),pm=mesNom(mesAnt(mes));
- if(!I.md.length)throw new Error('Ese mes no tiene días cargados.');
+const nomArchivo=(I,ext)=>`informe-picking-${I.a===I.b?I.a:I.a+'_a_'+I.b}.${ext}`;
+function excelInforme(a,b){
+ const I=datosInforme(a,b),wb=XLSX.utils.book_new(),nm=I.nom,pm=I.pnom;
+ if(!I.md.length)throw new Error('Ese período no tiene días cargados.');
  const ctl=[];
  if(I.bad.length)ctl.push(['Sucursal, usuario y área no suman lo mismo',I.bad.map(dm).join(', ')]);
  if(I.sinH.length)ctl.push(['Días sin horas (no entran en líneas por hora ni horas)',I.sinH.map(dm).join(', ')]);
  if(I.difH.length)ctl.push(['Días con líneas con hora distintas del total',I.difH.map(dm).join(', ')]);
  if(I.noUA.length)ctl.push(['Días sin usuario × área',I.noUA.map(dm).join(', ')]);
- const vs=(a,b,f)=>a==null||b==null?'':f(a,b);
+ const vs=(x,y,f)=>x==null||y==null?'':f(x,y);
  XLSX.utils.book_append_sheet(wb,hoja([
-  ['Informe mensual de picking'],[nm.charAt(0).toUpperCase()+nm.slice(1)],
+  ['Informe de picking'],[nm.charAt(0).toUpperCase()+nm.slice(1)],
   ['Datos',`del ${fmtY(I.md[0])} al ${fmtY(I.md[I.md.length-1])}`],['Generado',new Date().toLocaleString('es')],[],
   ['Indicador','Valor',`vs ${pm}`,'Nota'],
-  ['Líneas picadas',xN(I.tot),I.pds.length?xP(I.ptot?(I.tot-I.ptot)/I.ptot:null):'',I.pds.length?`${nf.format(I.ptot)} líneas en ${I.pds.length} días`:'sin datos del mes anterior'],
+  ['Líneas picadas',xN(I.tot),I.pds.length?xP(I.ptot?(I.tot-I.ptot)/I.ptot:null):'',I.pds.length?`${nf.format(I.ptot)} líneas en ${I.pds.length} días`:'sin datos del período anterior'],
   ['Días con datos',xN(I.md.length),'',''],
   ['Sucursales',xN(I.nS),'',''],['Usuarios',xN(I.nU),'',''],['Áreas',xN(I.nA),'',''],
-  ['Promedio por día',xD(I.pdia),I.pds.length?xP(vs(I.pdia,I.ptot/I.pds.length,(a,b)=>b?(a-b)/b:null)):'','líneas ÷ días con datos'],
+  ['Promedio por día',xD(I.pdia),I.pds.length?xP(vs(I.pdia,I.ppdia,(x,y)=>y?(x-y)/y:null)):'','líneas ÷ días con datos'],
   ['Promedio por usuario',xD(I.pu),'','líneas ÷ usuarios'],
   ['Promedio por usuario y día trabajado',xD(I.pud),'','líneas ÷ días-usuario con picking'],
   ['Mejor día',xN(I.best&&I.best.v),'',I.best?fmtW(I.best.d):''],
   [],['Horas de picking'],
-  ['Líneas por hora',xD(I.L),xD(vs(I.L,I.Lp,(a,b)=>a-b)),I.Lp!=null?`${nf1.format(I.Lp)} en ${pm} (diferencia en líneas/hora)`:''],
+  ['Líneas por hora',xD(I.L),xD(vs(I.L,I.Lp,(x,y)=>x-y)),I.Lp!=null?`${nf1.format(I.Lp)} en ${pm} (diferencia en líneas/hora)`:''],
   ['Horas de picking por día',xD(I.aH),'',`meta ${HCFG.meta} h`],
   ['Inicio promedio',xH(I.aI),'',''],['Fin promedio',xH(I.aF),'',''],
   ['Días que pasaron las 17:00',xN(I.dH?I.dOT:null),'',I.dH?`de ${I.dH} días con horas · ${I.nOT} días-usuario`:''],
@@ -969,6 +984,7 @@ function excelInforme(mes){
   ['Horas por usuario y día',`de la primera a la última línea, menos ${HCFG.almuerzo} min de almuerzo si picó antes de las 12:00 y después de las 13:00`],
   ['Días medidos',`líneas por hora, horas, inicio y fin solo cuentan días-usuario con ${HCFG.minLineas} líneas o más`],
   ['Cálculo de líneas por hora','suma de líneas ÷ suma de horas de los días medidos'],
+  ['Período anterior',`${pm} (la misma cantidad de meses, justo antes)`],
   [],['Controles de los datos'],...(ctl.length?ctl:[['Verificado','sucursales, usuarios y áreas suman lo mismo cada día; las líneas con hora suman lo mismo que el total']])
  ],[38,16,16,60]),'Resumen');
  const sd=f=>I.dias.reduce((s,x)=>s+f(x),0);
@@ -978,29 +994,179 @@ function excelInforme(mes){
   ['Total','',xN(I.tot),'','','',xD(I.L),xN(sd(x=>x.med)),xD(I.aH),xH(I.aI),xH(I.aF),xN(I.nOT)]
  ],[12,11,10,10,11,8,15,16,16,15,13,22]),'Por día');
  XLSX.utils.book_append_sheet(wb,hoja([
-  ['#','Sucursal','Líneas','Días','Prom. por día','% del mes'],
+  ['#','Sucursal','Líneas','Días','Prom. por día','% del período'],
   ...I.sucursales.map((r,i)=>[i+1,r[0],xN(r[1]),xN(r[2]),xD(r[3]),xP(I.tot?r[1]/I.tot:null)]),
-  ['','Total',xN(I.tot),'','',xP(I.tot?1:null)]],[5,14,10,7,13,10]),'Sucursales');
+  ['','Total',xN(I.tot),'','',xP(I.tot?1:null)]],[5,14,10,7,13,12]),'Sucursales');
  const at=I.areas.reduce((s,r)=>s+r[1],0);
- XLSX.utils.book_append_sheet(wb,hoja([['Área','Líneas','% del mes'],...I.areas.map(r=>[r[0],xN(r[1]),xP(at?r[1]/at:null)]),['Total',xN(at),xP(at?1:null)]],[10,10,10]),'Áreas');
+ XLSX.utils.book_append_sheet(wb,hoja([['Área','Líneas','% del período'],...I.areas.map(r=>[r[0],xN(r[1]),xP(at?r[1]/at:null)]),['Total',xN(at),xP(at?1:null)]],[10,10,12]),'Áreas');
  const un=I.usuarios.reduce((s,r)=>s+r.n,0);
  XLSX.utils.book_append_sheet(wb,hoja([
   ['#','Usuario','Líneas','Días','Prom. líneas por día','Días medidos','Horas por día','Líneas por hora',`vs ${pm}`,'Inicio','Fin','Días después de 17:00'],
   ...I.usuarios.map((r,i)=>[i+1,r.u,xN(r.n),xN(r.dias),xD(r.pd),xN(r.med),xD(r.h),xD(r.l),xD(r.dl),xH(r.ini),xH(r.fin),xN(r.ot)]),
-  ['','Total',xN(un),'','',xN(I.usuarios.reduce((s,r)=>s+r.med,0)),xD(I.aH),xD(I.L),xD(vs(I.L,I.Lp,(a,b)=>a-b)),xH(I.aI),xH(I.aF),xN(I.nOT)]
+  ['','Total',xN(un),'','',xN(I.usuarios.reduce((s,r)=>s+r.med,0)),xD(I.aH),xD(I.L),xD(vs(I.L,I.Lp,(x,y)=>x-y)),xH(I.aI),xH(I.aF),xN(I.nOT)]
  ],[5,14,10,7,18,13,13,14,12,8,8,20]),'Usuarios');
- if(I.ua.users.length){const tA=I.ua.areas.map((a,j)=>I.ua.users.reduce((s,u)=>s+u.v[j],0)),tt=tA.reduce((s,v)=>s+v,0),tdu=I.ua.users.reduce((s,u)=>s+u.d,0);
+ if(I.ua.users.length){const tA=I.ua.areas.map((x,j)=>I.ua.users.reduce((s,u)=>s+u.v[j],0)),tt=tA.reduce((s,v)=>s+v,0),tdu=I.ua.users.reduce((s,u)=>s+u.d,0);
   XLSX.utils.book_append_sheet(wb,hoja([['Usuario',...I.ua.areas,'Total','Días','Prom. por día'],
    ...I.ua.users.map(u=>[u.u,...u.v.map(xN),xN(u.t),xN(u.d),xD(u.d?u.t/u.d:0)]),
    ['Total',...tA.map(xN),xN(tt),'',xD(tdu?tt/tdu:null)]],[14,...I.ua.areas.map(()=>9),10,7,13]),'Usuario x área')}
  const cols=['',...I.md.map(xF),'Total'];
- const grid=(tit,R)=>{const tc=I.md.map((_,j)=>R.reduce((s,r)=>s+r.v[j],0));return hoja([[tit,...cols.slice(1)],...R.map(r=>[r.k,...r.v.map(v=>v?xN(v):''),xN(r.v.reduce((s,v)=>s+v,0))]),['Total',...tc.map(xN),xN(tc.reduce((s,v)=>s+v,0))]],[14,...I.md.map(()=>11),10])};
+ const grid=(tit,R)=>{const tc=I.md.map((x,j)=>R.reduce((s,r)=>s+r.v[j],0));return hoja([[tit,...cols.slice(1)],...R.map(r=>[r.k,...r.v.map(v=>v?xN(v):''),xN(r.v.reduce((s,v)=>s+v,0))]),['Total',...tc.map(xN),xN(tc.reduce((s,v)=>s+v,0))]],[14,...I.md.map(()=>11),10])};
  XLSX.utils.book_append_sheet(wb,grid('Sucursal',I.sxd),'Sucursal por día');
  XLSX.utils.book_append_sheet(wb,grid('Usuario',I.uxd),'Usuario por día');
- const file=`informe-picking-${mes}.xlsx`;XLSX.writeFile(wb,file);return{file,I}}
-$('ibtn').onclick=()=>{const mes=$('imes').value;if(!mes)return;
+ const file=nomArchivo(I,'xlsx');XLSX.writeFile(wb,file);return{file,I}}
+// ---------- PDF: 2 páginas A4 horizontales (diseño aprobado el 25-nov-2026), se guarda con "Guardar como PDF" del diálogo de impresión ----------
+function htmlInforme(I){
+ const C={ink:'#101b38',mut:'#55627d',line:'#e2e8f1',card:'#f6f8fc',acc:'#13a8bb',acct:'#0b7d8e',navy:'#16244a',low:'#b9c7da',ok:'#0b7a0b',warn:'#b4461b',trk:'#e1e7f0'};
+ const PAL={'--c1':'#109bb0','--c2':'#4a63d8','--c3':'#eb6834','--c4':'#8a6be0','--c5':'#d99a00','--c6':'#e0628f','--c0':'#a3abb7'};
+ const acol=x=>PAL[areaCol.get(x)||'--c0'],n0=v=>nf.format(Math.round(v)),n1=v=>v==null?'–':nf1.format(v),pc1=v=>nf1.format(Math.round(v*10)/10);
+ const fx=v=>v.toFixed(1);
+ const logo=(document.querySelector('img.lgo.th-lt')||{}).src||'';
+ const enCurso=I.b===hoyLocal().slice(0,7);
+ const d0=I.md[0],d1=I.md[I.md.length-1],fdm=new Intl.DateTimeFormat('es',{day:'numeric',month:'long',timeZone:'UTC'});
+ const rangoTxt=d0.slice(0,7)===d1.slice(0,7)?`del ${+d0.slice(8)} al ${fdm.format(T(d1))} de ${d1.slice(0,4)}`:`del ${fdm.format(T(d0))}${d0.slice(0,4)!==d1.slice(0,4)?' de '+d0.slice(0,4):''} al ${fdm.format(T(d1))} de ${d1.slice(0,4)}`;
+ const fwd=d=>new Intl.DateTimeFormat('es',{weekday:'long',day:'numeric',month:'short',timeZone:'UTC'}).format(T(d));
+ const card=(tit,sub,body,st)=>`<div class="cd" style="${st||''}"><div class="ch"><h2>${tit}</h2><span>${sub}</span></div>${body}</div>`;
+ const ring=(fr,txt,col)=>{const L=2*Math.PI*40,f=Math.max(0,Math.min(1,fr||0));return`<svg width="50" height="50" viewBox="0 0 100 100" aria-hidden="true" style="flex:none"><circle cx="50" cy="50" r="40" fill="none" stroke="${C.trk}" stroke-width="11"/>${f?`<circle cx="50" cy="50" r="40" fill="none" stroke="${col||C.acc}" stroke-width="11" stroke-linecap="round" stroke-dasharray="${fx(L*f)} ${fx(L)}" transform="rotate(-90 50 50)"/>`:''}<text x="50" y="57" text-anchor="middle" font-family="Poppins,sans-serif" font-weight="700" font-size="22" fill="${C.ink}">${esc(txt)}</text></svg>`};
+ const kpi=(id,lab,val,sub,extra,vst)=>`<div class="kp">${extra||''}<div class="kt"><span>${lab}</span><b id="${id}" style="${vst||''}">${val}</b><small>${sub}</small></div></div>`;
+ const arrow=(v,good)=>`<span style="color:${(good==null?v>=0:good)?C.ok:C.warn};font-weight:600">${v>=0?'▲':'▼'} `;
+ const hayH=I.dH>0;
+ const header=sub=>`<div class="hd"><div class="hl">${logo?`<img src="${logo}" alt="Nexocorp">`:''}<span class="sp"></span><div><h1>Informe de picking · <span>${esc(I.nom)}</span></h1><p>${sub}</p></div></div><div class="hr">Generado el ${new Date().toLocaleDateString('es')}</div></div>`;
+ const footer=(txt,p)=>`<div class="ft"><p>${txt}</p><span>Página ${p} de 2</span></div>`;
+ // ----- página 1 -----
+ const dpd=I.ppdia?(I.pdia-I.ppdia)/I.ppdia:null,dl=I.L!=null&&I.Lp!=null?I.L-I.Lp:null;
+ const k=[];
+ k.push(kpi('r-tot','Líneas picadas',n0(I.tot),`${n0(I.pdia)} por día`+(dpd!=null?` · ${arrow(dpd)}${pc1(Math.abs(dpd)*100)} %</span> vs ${esc(I.pcorto)}`:'')));
+ k.push(kpi('r-lph','Líneas por hora',hayH?n1(I.L):'–',dl!=null?`${arrow(dl)}${n1(Math.abs(dl))}</span> vs ${esc(I.pcorto)} (${n1(I.Lp)})`:hayH?`sin horas del ${esc(I.pcorto)}`:'sin horas'));
+ k.push(kpi('r-hd','Horas por día',I.aH!=null?n1(I.aH)+' h':'–',I.nV?`meta ${HCFG.meta} h · ${I.nMeta} de ${I.nV} la cumplen`:'sin días medidos',ring(I.aH!=null?I.aH/HCFG.meta:0,I.aH!=null?Math.round(I.aH/HCFG.meta*100)+'%':'–')));
+ k.push(kpi('r-ot','Días después de 17:00',hayH?`${I.dOT} de ${I.dH}`:'–',hayH?`${I.nOT} ${I.nOT===1?'día-usuario':'días-usuario'}`:'sin horas',ring(hayH?I.dOT/I.dH:0,hayH?String(I.dOT):'–',C.warn),hayH&&I.dOT?`color:${C.warn}`:''));
+ const xT=m=>(m-360)/(19*60-360)*150;
+ const tl=I.aI!=null?`<svg width="150" height="26" viewBox="0 0 150 26" aria-hidden="true"><rect x="0" y="6" width="150" height="8" rx="4" fill="${C.trk}"/><rect x="${fx(xT(450))}" y="6" width="${fx(xT(1020)-xT(450))}" height="8" rx="4" fill="#cdd7e5"/><rect x="${fx(xT(I.aI))}" y="6" width="${fx(Math.max(2,xT(I.aF)-xT(I.aI)))}" height="8" rx="4" fill="${C.acc}"/><text x="${fx(xT(450))}" y="25" font-size="10" fill="${C.mut}" text-anchor="middle">7:30</text><text x="${fx(xT(1020))}" y="25" font-size="10" fill="${C.mut}" text-anchor="middle">17:00</text></svg>`:'<small>sin horas en el período</small>';
+ k.push(`<div class="kp" style="flex-direction:column;align-items:stretch;gap:2px"><span class="kl">Inicio y fin promedio</span><b id="r-if" class="kv">${I.aI!=null?hmT(I.aI)+' – '+hmT(I.aF):'–'}</b>${tl}</div>`);
+ // líneas por día (hasta 31 días), por semana (hasta 26 semanas) o por mes
+ let tipo,bk;
+ if(I.md.length<=31){tipo='día';bk=I.dias.map(x=>({k:x.d,lab:I.a===I.b?String(+x.d.slice(8)):dm(x.d),v:x.l,tip:x.d}))}
+ else{const wk=new Map();I.dias.forEach(x=>{const m=mon(x.d);wk.set(m,(wk.get(m)||0)+x.l)});
+  if(wk.size<=26){tipo='semana';bk=[...wk].sort((x,y)=>x[0]<y[0]?-1:1).map(([m,v])=>({k:m,lab:dm(m),v}))}
+  else{tipo='mes';const mm=new Map();I.dias.forEach(x=>{const m=x.d.slice(0,7);mm.set(m,(mm.get(m)||0)+x.l)});bk=[...mm].sort((x,y)=>x[0]<y[0]?-1:1).map(([m,v])=>({k:m,lab:mesCorto(m).slice(0,3)+' '+m.slice(2,4),v}))}}
+ const nOps=I.usuarios.filter(u=>u.l!=null).length,showOps=Math.min(nOps,11),sinOps0=I.usuarios.length-nOps;
+ // alto de la fila 3 según los operadores (hasta 11 en la página 1; el resto en la página 2). Usa primero los ~20 px libres de la página y después achica la fila 2.
+ const needOps=54+showOps*14+Math.max(0,showOps-1)*3+(nOps>showOps||sinOps0?22:0),row3H=Math.max(216,needOps),extra=Math.max(0,row3H-228),dsz=Math.min(150,218-extra-60);
+ const H1=142-extra,W1=600,L0=44,B0=22,bw=(W1-L0)/bk.length,mxv=Math.max(...bk.map(x=>x.v),1),st=niceStep(mxv/3),mx=Math.ceil(mxv/st)*st;
+ const y1=v=>H1-B0-v/mx*(H1-B0-14),avg=bk.reduce((s,x)=>s+x.v,0)/bk.length,bmax=bk.reduce((m,x)=>!m||x.v>m.v?x:m,null);
+ let s=`<svg width="${W1}" height="${H1}" viewBox="0 0 ${W1} ${H1}" role="img" aria-label="Líneas por ${tipo}">`;
+ for(let g=0;g<=mx+1e-9;g+=st)s+=`<line x1="${L0}" x2="${W1}" y1="${fx(y1(g))}" y2="${fx(y1(g))}" stroke="${C.line}"/><text x="${L0-6}" y="${fx(y1(g)+4)}" font-size="11" fill="${C.mut}" text-anchor="end">${n0(g)}</text>`;
+ const gap=Math.min(8,bw*0.25);
+ bk.forEach((x,i)=>{const cx=L0+i*bw,col=x===bmax?C.navy:bk.length>1&&x.v>=avg?C.acc:C.low;
+  s+=`<rect x="${fx(cx+gap/2)}" y="${fx(y1(x.v))}" width="${fx(Math.max(1,bw-gap))}" height="${fx(y1(0)-y1(x.v))}" rx="3" fill="${col}"/>`;
+  if(bk.length<=31||i%2===0)s+=`<text x="${fx(cx+bw/2)}" y="${H1-6}" font-size="11" fill="${C.mut}" text-anchor="middle">${esc(x.lab)}</text>`;
+  if(x===bmax)s+=`<text x="${fx(Math.min(W1-20,Math.max(L0+20,cx+bw/2)))}" y="${fx(y1(x.v)-5)}" font-size="11" font-weight="700" fill="${C.navy}" text-anchor="middle">${n0(x.v)}</text>`});
+ if(bk.length>1)s+=`<line x1="${L0}" x2="${W1}" y1="${fx(y1(avg))}" y2="${fx(y1(avg))}" stroke="${C.ink}" stroke-dasharray="4 4"/><text x="${W1}" y="${fx(y1(avg)-5)}" font-size="11" fill="${C.ink}" text-anchor="end">promedio ${n0(avg)}</text>`;
+ s+='</svg>';
+ const sw=(c,t)=>`<span><i style="background:${c}"></i>${t}</span>`;
+ const c1=card(`Líneas por ${tipo}`,tipo==='día'?`${I.md.length} días con picking`:tipo==='semana'?`${bk.length} semanas · desde el lunes`:`${bk.length} meses`,s+`<div class="lg">${sw(C.acc,'sobre el promedio')}${sw(C.low,'bajo el promedio')}${sw(C.navy,`mejor ${tipo}`)}</div>`,'flex:0 0 640px');
+ // dona de áreas
+ const at=I.areas.reduce((t,x)=>t+x[1],0);let a0=0,dn=`<svg width="${dsz}" height="${dsz}" viewBox="0 0 200 200" role="img" aria-label="Líneas por área">`;
+ const P=(r,an)=>`${(100+r*Math.sin(an)).toFixed(2)},${(100-r*Math.cos(an)).toFixed(2)}`;
+ I.areas.forEach(([ar,v])=>{if(!v)return;let a1=a0+v/at*2*Math.PI;if(a1-a0>=2*Math.PI-1e-6)a1=a0+2*Math.PI-1e-4;const lg=a1-a0>Math.PI?1:0;dn+=`<path d="M${P(94,a0)}A94,94 0 ${lg} 1 ${P(94,a1)}L${P(60,a1)}A60,60 0 ${lg} 0 ${P(60,a0)}Z" fill="${acol(ar)}" stroke="#fff" stroke-width="2"/>`;a0=a1});
+ dn+=`<text x="100" y="100" text-anchor="middle" font-family="Poppins,sans-serif" font-weight="700" font-size="25" fill="${C.ink}">${n0(at)}</text><text x="100" y="122" text-anchor="middle" font-size="14" fill="${C.mut}">líneas</text></svg>`;
+ const lgd=I.areas.map(([ar,v])=>`<div class="lr"><i style="background:${acol(ar)}"></i><b>${esc(ar)}</b><span>${n0(v)}</span><span class="m">${pc1(at?v/at*100:0)} %</span></div>`).join('');
+ const c2=card('Líneas por área',`${I.areas.length} ${I.areas.length===1?'área':'áreas'}`,`<div style="display:flex;align-items:center;gap:18px;flex:1">${dn}<div style="display:flex;flex-direction:column;gap:9px;flex:1">${lgd}</div></div>`,'flex:1');
+ // top 10 sucursales
+ const top=I.sucursales.slice(0,10),sm=Math.max(...top.map(x=>x[1]),1),t10=top.reduce((t,x)=>t+x[1],0);
+ const rs=top.map((x,i)=>`<div class="br" style="grid-template-columns:18px 52px 1fr 52px"><span class="m" style="text-align:right">${i+1}</span><b>${esc(x[0])}</b><span class="bt"><i style="width:${fx(x[1]/sm*100)}%;background:${i?C.acc:C.navy}"></i></span><span style="text-align:right">${n0(x[1])}</span></div>`).join('');
+ const c3=card(`Top ${top.length} sucursales`,`${pc1(I.tot?t10/I.tot*100:0)} % del total · de ${I.nS} sucursales`,`<div style="display:flex;flex-direction:column;gap:2px;margin-top:2px">${rs}</div>`,'flex:0 0 420px');
+ // operadores: líneas por hora
+ const ops=I.usuarios.filter(u=>u.l!=null).sort((x,y)=>y.l-x.l||x.u.localeCompare(y.u)),team=I.L,mxl=Math.max(20,Math.ceil(Math.max(...ops.map(u=>u.l),team||0)*1.08/20)*20);
+ const ro=ops.slice(0,showOps).map(u=>`<div class="br" style="grid-template-columns:78px 1fr 44px 56px"><b>${esc(u.u)}</b><span class="bt" style="position:relative;overflow:visible"><i style="width:${fx(u.l/mxl*100)}%;background:${team!=null&&u.l<team?C.low:C.acc}"></i>${team!=null?`<em style="left:${fx(team/mxl*100)}%"></em>`:''}</span><b style="text-align:right">${n1(u.l)}</b><b style="text-align:right;color:${u.dl==null?C.mut:u.dl>=0?C.ok:C.warn}">${u.dl==null?'–':(u.dl>=0?'▲ ':'▼ ')+n1(Math.abs(u.dl))}</b></div>`).join('');
+ const sinOps=I.usuarios.length-nOps,masOps=nOps-showOps;
+ const c4=card('Operadores · líneas por hora',ops.length?`línea punteada = equipo (${n1(team)}) · flecha = vs ${esc(I.pcorto)}`:'',ops.length?`<div style="display:flex;flex-direction:column;gap:3px;margin-top:2px">${ro}</div>`+(masOps||sinOps?`<small class="m">${masOps?`y ${masOps} más (ver página 2)`:''}${masOps&&sinOps?' · ':''}${sinOps?`${sinOps} sin días medidos`:''}</small>`:''):'<p class="m">Sin horas en el período.</p>','flex:1');
+ const ins=[['Mejor día',I.best?`${fwd(I.best.d)} · ${n0(I.best.v)} líneas`:'–'],['Ritmo del equipo',hayH?`${n1(I.L)} líneas/h`+(dl!=null?`, ${dl>=0?'+':'−'}${n1(Math.abs(dl))} vs ${esc(I.pcorto)}`:''):'sin horas en el período'],['Horario',hayH?`${I.dOT} de ${I.dH} días alguien pasó las 17:00`:'sin horas en el período']];
+ const p1=header(`Almacén B300 · ${rangoTxt} · ${I.md.length} ${I.md.length===1?'día':'días'} con datos${enCurso?' · mes en curso':''}`)+
+  `<div class="kps">${k.join('')}</div><div class="row" style="height:${218-extra}px">${c1}${c2}</div><div class="row" style="height:${row3H}px">${c3}${c4}</div>`+
+  `<div class="row">${ins.map(([t,v])=>`<div class="in"><span>${t}</span><b>${v}</b></div>`).join('')}</div>`+
+  footer(`Horas = primera a última línea − ${HCFG.almuerzo} min de almuerzo; solo días-usuario con ${HCFG.minLineas} líneas o más. Líneas por hora = líneas ÷ esas horas. Comparación con ${esc(I.pnom)}, por día.`+(I.sinH.length?` ${I.sinH.length} ${I.sinH.length===1?'día sin horas no entra':'días sin horas no entran'} en horas ni líneas por hora.`:''),1);
+ // ----- página 2 -----
+ // tendencia: semanas cargadas hasta el final del período (al menos 8, como mucho 26); si el período tiene más de 26 semanas, por mes
+ const dsAll=Object.keys(D).sort().filter(d=>d<=d1),inP=d=>d>=d0&&d<=d1;
+ let tb,tt;
+ const wAll=[...new Set(dsAll.map(mon))].sort(),wIn=new Set(I.md.map(mon));
+ if(wIn.size<=26){tt='semanas';tb=wAll.slice(-Math.min(26,Math.max(8,wIn.size))).map(w=>{const dd=dsAll.filter(d=>mon(d)===w);return{lab:dm(w),dentro:wIn.has(w),v:dd.reduce((t,d)=>t+dayTot(d),0)/dd.length,l:lph(hRows(dd))}})}
+ else{tt='meses';const mAll=[...new Set(dsAll.map(d=>d.slice(0,7)))].sort(),k2=nMeses(I.a,I.b);tb=mAll.slice(-Math.min(24,Math.max(6,k2))).map(m=>{const dd=dsAll.filter(d=>d.slice(0,7)===m);return{lab:mesCorto(m).slice(0,3)+' '+m.slice(2,4),dentro:m>=I.a&&m<=I.b,v:dd.reduce((t,d)=>t+dayTot(d),0)/dd.length,l:lph(hRows(dd))}})}
+ const W2=600,H2=170,L2=48,R2=34,B2=24,bw2=(W2-L2-R2)/tb.length,mx2v=Math.max(...tb.map(x=>x.v),1),st2=niceStep(mx2v/3),mx2=Math.ceil(mx2v/st2)*st2;
+ const ls_=tb.map(x=>x.l).filter(v=>v!=null),lo=ls_.length?Math.floor((Math.min(...ls_)-5)/10)*10:0,hi=ls_.length?Math.ceil((Math.max(...ls_)+5)/10)*10:100;
+ const y2=v=>H2-B2-v/mx2*(H2-B2-16),yl=v=>H2-B2-(v-lo)/((hi-lo)||1)*(H2-B2-16);
+ s=`<svg width="${W2}" height="${H2}" viewBox="0 0 ${W2} ${H2}" role="img" aria-label="Tendencia">`;
+ for(let g=0;g<=mx2+1e-9;g+=st2)s+=`<line x1="${L2}" x2="${W2-R2}" y1="${fx(y2(g))}" y2="${fx(y2(g))}" stroke="${C.line}"/><text x="${L2-6}" y="${fx(y2(g)+4)}" font-size="11" fill="${C.mut}" text-anchor="end">${n0(g)}</text>`;
+ if(ls_.length)[lo,(lo+hi)/2,hi].forEach(g=>{s+=`<text x="${W2-R2+6}" y="${fx(yl(g)+4)}" font-size="11" fill="${C.acct}">${n0(g)}</text>`});
+ const pts=[];
+ tb.forEach((x,i)=>{const cx=L2+i*bw2,g2=Math.min(20,bw2*0.3);s+=`<rect x="${fx(cx+g2/2)}" y="${fx(y2(x.v))}" width="${fx(Math.max(1,bw2-g2))}" height="${fx(y2(0)-y2(x.v))}" rx="3" fill="${x.dentro?'#9fb2cc':'#d6dee9'}"/>`;
+  if(tb.length<=14||i%2===0)s+=`<text x="${fx(cx+bw2/2)}" y="${H2-7}" font-size="11" fill="${C.mut}" text-anchor="middle">${esc(x.lab)}</text>`;
+  pts.push(x.l==null?null:[cx+bw2/2,yl(x.l),x.l])});
+ let seg=[];const segs=[];pts.forEach(p=>{if(p)seg.push(p);else{if(seg.length)segs.push(seg);seg=[]}});if(seg.length)segs.push(seg);
+ segs.forEach(sg=>{if(sg.length>1)s+=`<polyline points="${sg.map(p=>fx(p[0])+','+fx(p[1])).join(' ')}" fill="none" stroke="${C.acc}" stroke-width="2.5"/>`});
+ pts.forEach(p=>{if(p)s+=`<circle cx="${fx(p[0])}" cy="${fx(p[1])}" r="3.5" fill="#fff" stroke="${C.acc}" stroke-width="2"/>`+(tb.length<=14?`<text x="${fx(p[0])}" y="${fx(p[1]-8)}" font-size="11" font-weight="600" fill="${C.acct}" text-anchor="middle">${n1(p[2])}</text>`:'')});
+ s+='</svg>';
+ const c5=card(`Tendencia de las últimas ${tb.length} ${tt}`,tt==='semanas'?'semana que empieza el lunes':'por mes',s+`<div class="lg">${sw('#9fb2cc','líneas por día (eje izq.)')}<span><i style="background:${C.acc};height:3px;vertical-align:3px;width:14px"></i>líneas por hora (eje der.)</span>${tb.some(x=>!x.dentro)?sw('#d6dee9','fuera del período'):''}</div>`,'flex:0 0 640px');
+ // líneas según la hora del día
+ let c6;
+ if(I.hh.n){const hv=I.hh.v.map(([h,t])=>[h,t/I.hh.n]),h0=hv[0][0],h1=hv[hv.length-1][0],arr=[];for(let h=h0;h<=h1;h++){const f=hv.find(x=>x[0]===h);arr.push([h,f?f[1]:0])}
+  const W3=352,H3=170,L3=38,bw3=(W3-L3)/arr.length,m3v=Math.max(...arr.map(x=>x[1]),1),st3=niceStep(m3v/3),m3=Math.ceil(m3v/st3)*st3,y3=v=>H3-B2-v/m3*(H3-B2-10),pk=Math.max(...arr.map(x=>x[1]));
+  s=`<svg width="${W3}" height="${H3}" viewBox="0 0 ${W3} ${H3}" role="img" aria-label="Líneas según la hora del día">`;
+  for(let g=0;g<=m3+1e-9;g+=st3)s+=`<line x1="${L3}" x2="${W3}" y1="${fx(y3(g))}" y2="${fx(y3(g))}" stroke="${C.line}"/><text x="${L3-5}" y="${fx(y3(g)+4)}" font-size="11" fill="${C.mut}" text-anchor="end">${n0(g)}</text>`;
+  arr.forEach(([h,v],i)=>{const cx=L3+i*bw3;s+=`<rect x="${fx(cx+3)}" y="${fx(y3(v))}" width="${fx(Math.max(1,bw3-6))}" height="${fx(y3(0)-y3(v))}" rx="3" fill="${v===pk?C.navy:C.acc}"/><text x="${fx(cx+bw3/2)}" y="${H3-7}" font-size="11" fill="${C.mut}" text-anchor="middle">${h}h</text>`});
+  s+='</svg>';c6=card('Líneas según la hora del día',`promedio por día · ${I.hh.n} ${I.hh.n===1?'día':'días'} con horas`,s+`<span class="m" style="font-size:12px">Muestra los picos y la caída del almuerzo · pico: ${arr.find(x=>x[1]===pk)[0]}:00</span>`,'flex:1')}
+ else c6=card('Líneas según la hora del día','','<p class="m">Sin horas en el período.</p>','flex:1');
+ // horario promedio por operador
+ const hu=I.usuarios.filter(u=>u.ini!=null).sort((x,y)=>x.fin-y.fin||x.u.localeCompare(y.u)).slice(0,14),Wt=330,X0=360,X1=1140,xx=m=>(Math.max(X0,Math.min(X1,m))-X0)/(X1-X0)*Wt;
+ const ax=`<div class="br" style="grid-template-columns:78px ${Wt}px 1fr;height:14px"><span></span><svg width="${Wt}" height="14" viewBox="0 0 ${Wt} 14" aria-hidden="true">${[8,10,12,14,16,18].map(h=>`<text x="${fx(xx(h*60))}" y="11" text-anchor="middle" font-size="11" fill="${C.mut}">${h}h</text>`).join('')}</svg><span class="m" style="text-align:right">horas/día</span></div>`;
+ const hr=hu.map(u=>`<div class="br" style="grid-template-columns:78px ${Wt}px 1fr"><b>${esc(u.u)}</b><svg width="${Wt}" height="14" viewBox="0 0 ${Wt} 14" aria-hidden="true"><rect x="0" y="3" width="${Wt}" height="8" rx="4" fill="#eef2f7"/><rect x="${fx(xx(450))}" y="3" width="${fx(xx(1020)-xx(450))}" height="8" fill="#dde4ee"/><rect x="${fx(xx(u.ini))}" y="3" width="${fx(Math.max(2,xx(u.fin)-xx(u.ini)))}" height="8" rx="4" fill="${u.fin>HCFG.limite?C.warn:C.acc}"/><line x1="${fx(xx(1020))}" x2="${fx(xx(1020))}" y1="0" y2="14" stroke="${C.ink}" stroke-dasharray="2 2"/></svg><b style="text-align:right;${u.h>=HCFG.meta?'color:'+C.ok:''}">${n1(u.h)} h</b></div>`).join('');
+ const c7=card('Horario promedio por operador','gris = 7:30 a 17:00 · naranja = termina después de las 17:00',hu.length?`<div style="display:flex;flex-direction:column;gap:4px">${ax}${hr}</div>`:'<p class="m">Sin horas en el período.</p>','flex:0 0 510px');
+ // operador × área
+ let c8;
+ if(I.ua.users.length){const ar=I.ua.areas,us=I.ua.users.slice(0,14),cm=Math.max(...us.flatMap(u=>u.v),1);
+  let h=`<div style="display:grid;grid-template-columns:78px repeat(${ar.length},minmax(0,1fr)) 60px;gap:3px;font-size:12px"><span></span>${ar.map(x=>`<b class="m" style="text-align:center">${esc(x)}</b>`).join('')}<b class="m" style="text-align:right">Total</b>`;
+  us.forEach(u=>{const mu=Math.max(...u.v);h+=`<b style="line-height:17px">${esc(u.u)}</b>`+u.v.map(v=>{const p=0.08+0.85*Math.sqrt(v/cm);return`<span style="text-align:center;line-height:17px;border-radius:4px;background:rgba(11,141,159,${p.toFixed(2)});color:${p>0.55?'#fff':C.ink};font-weight:${v&&v===mu?700:400}">${v?n0(v):'·'}</span>`}).join('')+`<b style="text-align:right;line-height:17px">${n0(u.t)}</b>`});
+  h+='</div>';c8=card('Operador × área',`líneas del período · en negrita, el área donde más picó${I.ua.users.length>14?` · ${I.ua.users.length-14} más en el Excel`:''}`,h,'flex:1')}
+ else c8=card('Operador × área','','<p class="m">Sin datos de usuario × área en el período.</p>','flex:1');
+ const p2=header('Detalle · tendencia, horarios y distribución por área')+`<div class="row" style="height:252px">${c5}${c6}</div><div class="row" style="height:${Math.max(262,60+Math.max(hu.length+1,(I.ua.users.slice(0,14).length+1))*20)}px">${c7}${c8}</div>`+
+  footer(`Líneas por día = líneas de la semana (o del mes) ÷ días con picking. Horario = inicio y fin promedio de los días con ${HCFG.minLineas} líneas o más.`+(I.noUA.length?` ${I.noUA.length} ${I.noUA.length===1?'día sin usuario × área':'días sin usuario × área'}.`:''),2);
+ const css=`@page{size:297mm 210mm;margin:0}*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{margin:0;background:#fff;font-family:Inter,sans-serif;color:${C.ink}}
+.pg{width:1122px;height:793px;overflow:hidden;padding:28px 40px 24px;display:flex;flex-direction:column;gap:10px;break-after:page;page-break-after:always}.pg:last-child{break-after:auto;page-break-after:auto}
+.hd{display:flex;justify-content:space-between;align-items:center;height:46px}.hl{display:flex;align-items:center;gap:16px}.hl img{height:26px;width:auto}.sp{width:1px;height:32px;background:${C.line}}
+h1{margin:0;font:700 21px/1.2 Poppins,sans-serif}h1 span{color:${C.acct}}.hd p{margin:2px 0 0;font-size:12.5px;color:${C.mut}}.hr{font-size:12px;color:${C.mut}}
+.kps{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;height:104px}
+.kp{background:#fff;border:1px solid ${C.line};border-radius:14px;padding:10px 12px;display:flex;gap:10px;align-items:center;min-width:0;overflow:hidden}
+.kt{display:flex;flex-direction:column;gap:2px;min-width:0}.kt span,.kl{font-size:12px;color:${C.mut}}.kt b,.kv{font:700 26px/1.1 Poppins,sans-serif;color:${C.ink}}.kt small,.kp small{font-size:12px;color:${C.mut};line-height:1.3}
+.row{display:flex;gap:12px}.cd{background:${C.card};border:1px solid ${C.line};border-radius:14px;padding:12px 16px;display:flex;flex-direction:column;gap:6px;min-width:0;overflow:hidden}
+.ch{display:flex;justify-content:space-between;align-items:baseline;gap:10px}.ch h2{margin:0;font:600 14px/1.3 Poppins,sans-serif;white-space:nowrap}.ch span{font-size:12px;color:${C.mut};text-align:right}
+.lg{display:flex;gap:14px;font-size:12px;color:${C.mut}}.lg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px}
+.lr{display:grid;grid-template-columns:14px 44px 1fr 50px;gap:6px;align-items:center;font-size:12.5px}.lr i{width:10px;height:10px;border-radius:50%}.lr b{font-weight:600}.lr span{text-align:right}
+.br{display:grid;gap:8px;align-items:center;font-size:12.5px;height:14px}.br b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bt{height:10px;border-radius:5px;background:#e9eef5;display:block}.bt i{display:block;height:100%;border-radius:5px}.bt em{position:absolute;top:-3px;bottom:-3px;width:0;border-left:1.5px dashed ${C.ink}}
+.m{color:${C.mut}}.cd p{margin:4px 0;font-size:13px}
+.in{flex:1;display:flex;flex-direction:column;gap:1px;padding:7px 12px;border-radius:10px;background:#e9f7f9}.in span{font-size:11.5px;font-weight:600;color:${C.acct};text-transform:uppercase;letter-spacing:.04em}.in b{font-size:13px;font-weight:500}
+.ft{display:flex;justify-content:space-between;align-items:center;gap:20px;border-top:1px solid ${C.line};padding-top:8px;margin-top:auto}.ft p{margin:0;font-size:12px;color:${C.mut};line-height:1.35;max-width:880px}.ft span{font-size:12px;color:${C.mut};white-space:nowrap}`;
+ return`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${nomArchivo(I,'pdf').replace(/\.pdf$/,'')}</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@500;600;700&display=swap"><style>${css}</style></head><body><section class="pg">${p1}</section><section class="pg">${p2}</section></body></html>`}
+async function pdfInforme(a,b){
+ const I=datosInforme(a,b);if(!I.md.length)throw new Error('Ese período no tiene días cargados.');
+ areaColors();
+ const html=htmlInforme(I);
+ let f=$('ifr');if(f)f.remove();
+ f=document.createElement('iframe');f.id='ifr';f.title='Informe para imprimir';f.setAttribute('aria-hidden','true');f.style.cssText='position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none';
+ document.body.appendChild(f);
+ await new Promise(r=>{f.onload=r;f.srcdoc=html});
+ const w=f.contentWindow;
+ try{await Promise.race([w.document.fonts.ready,new Promise(r=>setTimeout(r,3000))])}catch{}
+ const tt=document.title;document.title=nomArchivo(I,'pdf').replace(/\.pdf$/,''); // nombre sugerido del PDF
+ w.focus();w.print();setTimeout(()=>{document.title=tt},1000);
+ return I}
+$('ibtn').onclick=()=>{const[a,b]=rangoInf();if(!a)return;
  if(typeof XLSX==='undefined'||!XLSX.writeFile){ist('warn','No se pudo cargar la librería de Excel. Revisá la conexión y volvé a intentar.');return}
- try{const{file,I}=excelInforme(mes);ist(I.bad.length||I.sinH.length||I.difH.length?'warn':'ok',`Descargado ${file}: ${nf.format(I.tot)} líneas en ${I.md.length} días.`+(I.sinH.length?` ${I.sinH.length} ${I.sinH.length===1?'día no tiene':'días no tienen'} horas.`:'')+(I.bad.length?' Hay días con totales que no cuadran (ver hoja Resumen).':''))}
+ try{const{file,I}=excelInforme(a,b);ist(I.bad.length||I.sinH.length||I.difH.length?'warn':'ok',`Descargado ${file}: ${nf.format(I.tot)} líneas en ${I.md.length} días.`+(I.sinH.length?` ${I.sinH.length} ${I.sinH.length===1?'día no tiene':'días no tienen'} horas.`:'')+(I.bad.length?' Hay días con totales que no cuadran (ver hoja Resumen).':''))}
+ catch(e){ist('warn','No se pudo armar el informe: '+e.message)}};
+$('ipdf').onclick=async()=>{const[a,b]=rangoInf();if(!a)return;
+ try{const I=await pdfInforme(a,b);ist(I.bad.length||I.sinH.length?'warn':'ok',`Informe de ${I.nom}: ${nf.format(I.tot)} líneas en ${I.md.length} días. En la ventana de impresión elegí "Guardar como PDF".`+(I.sinH.length?` ${I.sinH.length} ${I.sinH.length===1?'día no tiene':'días no tienen'} horas.`:''))}
  catch(e){ist('warn','No se pudo armar el informe: '+e.message)}};
 // resumen por mes de lo cargado (pestaña Carga)
 function cargados(ds){
