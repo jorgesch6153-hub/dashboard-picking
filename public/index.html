@@ -526,7 +526,7 @@ dialog .card{background:var(--card)}
    <div class="tw" style="margin-top:10px;max-height:46vh"><table id="upd"></table></div>
    <div class="row"><button type="button" class="sec" id="upc">Cancelar</button><button type="button" class="pri ac" id="upg">Guardar</button></div>
   </div></section>
- <section><h2>Informe del período</h2><p>Elegí un mes o un rango de meses. PDF: dos páginas con gráficos para gerencia (se guarda con "Guardar como PDF" en la ventana de impresión). Excel: el detalle por día, sucursal, área y usuario. Los dos usan los mismos cálculos que las pestañas Líneas y Horas y se comparan con el período anterior del mismo largo.</p>
+ <section><h2>Informe del período</h2><p>Elegí un mes o un rango de meses. PDF: dos páginas con gráficos para gerencia, en color y A4 horizontal. Excel: el detalle por día, sucursal, área y usuario. Los dos usan los mismos cálculos que las pestañas Líneas y Horas y se comparan con el período anterior del mismo largo.</p>
   <div class="row" style="justify-content:flex-start;margin-top:0;align-items:center"><label for="imes" style="font-size:.84rem;color:var(--mut)">Desde</label><select id="imes" aria-label="Desde el mes"></select><label for="imes2" style="font-size:.84rem;color:var(--mut)">Hasta</label><select id="imes2" aria-label="Hasta el mes"></select></div>
   <div class="row" style="justify-content:flex-start"><button type="button" class="pri ac" id="ipdf">Descargar PDF</button><button type="button" class="sec" id="ibtn">Descargar Excel</button></div>
   <p id="ist" class="msg" style="margin-top:12px"></p></section>
@@ -1148,26 +1148,61 @@ h1{margin:0;font:700 21px/1.2 Poppins,sans-serif}h1 span{color:${C.acct}}.hd p{m
 .in{flex:1;display:flex;flex-direction:column;gap:1px;padding:7px 12px;border-radius:10px;background:#e9f7f9}.in span{font-size:11.5px;font-weight:600;color:${C.acct};text-transform:uppercase;letter-spacing:.04em}.in b{font-size:13px;font-weight:500}
 .ft{display:flex;justify-content:space-between;align-items:center;gap:20px;border-top:1px solid ${C.line};padding-top:8px;margin-top:auto}.ft p{margin:0;font-size:12px;color:${C.mut};line-height:1.35;max-width:880px}.ft span{font-size:12px;color:${C.mut};white-space:nowrap}`;
  return`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${nomArchivo(I,'pdf').replace(/\.pdf$/,'')}</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@500;600;700&display=swap"><style>${css}</style></head><body><section class="pg">${p1}</section><section class="pg">${p2}</section></body></html>`}
-async function pdfInforme(a,b){
+// PDF generado en la página (25-nov-2026): cada hoja se dibuja como imagen en alta resolución y se arma un PDF A4 horizontal.
+// No usa el diálogo de impresión (que aplicaba la impresora: blanco y negro, márgenes y encabezados) ni librerías externas.
+const URL_FUENTES='https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@500;600;700&display=swap';
+let fuentesCSS=null;
+async function fuentesEmbebidas(){ // Inter y Poppins (subconjunto latin) incrustadas, para que el dibujo use las mismas letras en cualquier PC
+ if(fuentesCSS!==null)return fuentesCSS;
+ try{
+  const css=await(await fetch(URL_FUENTES)).text();
+  const bloques=css.split('/* ').filter(b=>/^latin \*\//.test(b)).map(b=>b.slice(b.indexOf('@font-face')));
+  const b64=async u=>{const bl=await(await fetch(u)).blob();return await new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=no;r.readAsDataURL(bl)})};
+  const out=await Promise.all(bloques.map(async b=>{const m=b.match(/url\(([^)]+)\)/);if(!m)return'';return b.replace(m[0],`url(${await b64(m[1].replace(/['"]/g,''))})`)}));
+  fuentesCSS=out.join('\n');
+ }catch{fuentesCSS=''}
+ return fuentesCSS}
+// PDF mínimo con una imagen JPEG por página, ocupando toda la hoja
+function pdfDeJpegs(pags,ancho,alto){
+ const enc=new TextEncoder(),partes=[],off=[];let len=0;
+ const put=x=>{const b=typeof x==='string'?enc.encode(x):x;partes.push(b);len+=b.length};
+ const obj=(n,f)=>{off[n]=len;put(`${n} 0 obj\n`);f();put('\nendobj\n')};
+ put('%PDF-1.4\n%âãÏÓ\n');
+ obj(1,()=>put('<< /Type /Catalog /Pages 2 0 R >>'));
+ obj(2,()=>put(`<< /Type /Pages /Kids [${pags.map((p,i)=>`${3+3*i} 0 R`).join(' ')}] /Count ${pags.length} >>`));
+ pags.forEach((p,i)=>{const pg=3+3*i,cs=`q ${ancho} 0 0 ${alto} 0 0 cm /Im${i} Do Q`;
+  obj(pg,()=>put(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${ancho} ${alto}] /Resources << /XObject << /Im${i} ${pg+1} 0 R >> >> /Contents ${pg+2} 0 R >>`));
+  obj(pg+1,()=>{put(`<< /Type /XObject /Subtype /Image /Width ${p.w} /Height ${p.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${p.bytes.length} >>\nstream\n`);put(p.bytes);put('\nendstream')});
+  obj(pg+2,()=>put(`<< /Length ${cs.length} >>\nstream\n${cs}\nendstream`))});
+ const x=len,n=3+3*pags.length;
+ put(`xref\n0 ${n}\n0000000000 65535 f \n`+off.slice(1,n).map(o=>String(o).padStart(10,'0')+' 00000 n \n').join(''));
+ put(`trailer\n<< /Size ${n} /Root 1 0 R >>\nstartxref\n${x}\n%%EOF\n`);
+ return new Blob(partes,{type:'application/pdf'})}
+async function pdfInforme(a,b,soloBlob){
  const I=datosInforme(a,b);if(!I.md.length)throw new Error('Ese período no tiene días cargados.');
  areaColors();
- const html=htmlInforme(I);
- let f=$('ifr');if(f)f.remove();
- f=document.createElement('iframe');f.id='ifr';f.title='Informe para imprimir';f.setAttribute('aria-hidden','true');f.style.cssText='position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none';
- document.body.appendChild(f);
- await new Promise(r=>{f.onload=r;f.srcdoc=html});
- const w=f.contentWindow;
- try{await Promise.race([w.document.fonts.ready,new Promise(r=>setTimeout(r,3000))])}catch{}
- const tt=document.title;document.title=nomArchivo(I,'pdf').replace(/\.pdf$/,''); // nombre sugerido del PDF
- w.focus();w.print();setTimeout(()=>{document.title=tt},1000);
- return I}
+ const doc=new DOMParser().parseFromString(htmlInforme(I),'text/html');
+ const css=(doc.querySelector('style')||{}).textContent||'',fu=await fuentesEmbebidas(),xs=new XMLSerializer();
+ const W=1122,H=793,E=2.5,pags=[];
+ for(const pg of doc.querySelectorAll('.pg')){
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><foreignObject x="0" y="0" width="${W}" height="${H}"><div xmlns="http://www.w3.org/1999/xhtml" style="margin:0;width:${W}px;height:${H}px;background:#fff;font-family:Inter,sans-serif;color:#101b38"><style>${fu}\n${css}</style>${xs.serializeToString(pg).replace(/^<section xmlns="http:\/\/www.w3.org\/1999\/xhtml"/,'<section')}</div></foreignObject></svg>`;
+  const img=new Image();img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
+  await img.decode();
+  const cv=document.createElement('canvas');cv.width=Math.round(W*E);cv.height=Math.round(H*E);
+  const cx=cv.getContext('2d');cx.fillStyle='#fff';cx.fillRect(0,0,cv.width,cv.height);cx.drawImage(img,0,0,cv.width,cv.height);
+  const bl=await new Promise(ok=>cv.toBlob(ok,'image/jpeg',0.92));
+  pags.push({bytes:new Uint8Array(await bl.arrayBuffer()),w:cv.width,h:cv.height})}
+ const pdf=pdfDeJpegs(pags,841.89,595.28),file=nomArchivo(I,'pdf');
+ if(!soloBlob){const u=URL.createObjectURL(pdf),l=document.createElement('a');l.href=u;l.download=file;document.body.appendChild(l);l.click();l.remove();setTimeout(()=>URL.revokeObjectURL(u),5000)}
+ return{I,file,pdf,fuentes:!!fu}}
 $('ibtn').onclick=()=>{const[a,b]=rangoInf();if(!a)return;
  if(typeof XLSX==='undefined'||!XLSX.writeFile){ist('warn','No se pudo cargar la librería de Excel. Revisá la conexión y volvé a intentar.');return}
  try{const{file,I}=excelInforme(a,b);ist(I.bad.length||I.sinH.length||I.difH.length?'warn':'ok',`Descargado ${file}: ${nf.format(I.tot)} líneas en ${I.md.length} días.`+(I.sinH.length?` ${I.sinH.length} ${I.sinH.length===1?'día no tiene':'días no tienen'} horas.`:'')+(I.bad.length?' Hay días con totales que no cuadran (ver hoja Resumen).':''))}
  catch(e){ist('warn','No se pudo armar el informe: '+e.message)}};
-$('ipdf').onclick=async()=>{const[a,b]=rangoInf();if(!a)return;
- try{const I=await pdfInforme(a,b);ist(I.bad.length||I.sinH.length?'warn':'ok',`Informe de ${I.nom}: ${nf.format(I.tot)} líneas en ${I.md.length} días. En la ventana de impresión elegí "Guardar como PDF".`+(I.sinH.length?` ${I.sinH.length} ${I.sinH.length===1?'día no tiene':'días no tienen'} horas.`:''))}
- catch(e){ist('warn','No se pudo armar el informe: '+e.message)}};
+$('ipdf').onclick=async()=>{const[a,b]=rangoInf();if(!a)return;const bt=$('ipdf');bt.disabled=true;ist('','Armando el PDF…');
+ try{const{I,file,fuentes}=await pdfInforme(a,b);ist(I.bad.length||I.sinH.length?'warn':'ok',`Descargado ${file}: ${nf.format(I.tot)} líneas en ${I.md.length} días.`+(I.sinH.length?` ${I.sinH.length} ${I.sinH.length===1?'día no tiene':'días no tienen'} horas.`:'')+(fuentes?'':' (sin conexión a Google Fonts: se usaron las letras de esta PC)'))}
+ catch(e){ist('warn','No se pudo armar el PDF: '+e.message)}
+ bt.disabled=false};
 // resumen por mes de lo cargado (pestaña Carga)
 function cargados(ds){
  informeMeses(ds);
