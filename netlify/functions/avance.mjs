@@ -159,7 +159,7 @@ export default async (req) => {
   index[r.dia] = { ...(prev || {}), dia: r.dia, hora: r.hora, fin: r.fin, tot: r.tot, archivo, origen, subido: snap.subido, cambio };
   await st.setJSON("index", index);
   return json({ ok: true, dia: r.dia, hora: r.hora, fin: r.fin, tot: r.tot, pend: r.pend, areas: r.areas,
-    avisos: { estadosRaros: r.estadosRaros, otras: r.otras, finOtroDia: r.finOtroDia, finSinUsuario: r.finSinUsuario, finSinHora: r.finSinHora, repetidas: snap.nRepetidas }, cambioTrasCierre: cambio });
+    avisos: { estadosRaros: r.estadosRaros, otras: r.otras, finOtroDia: r.finOtroDia, finSinUsuario: r.finSinUsuario, finSinHora: r.finSinHora, repetidas: snap.nRepetidas, ubicAlt: r.ubicAlt, ubicDif: r.ubicDif, ubicDifEj: r.ubicDifEj }, cambioTrasCierre: cambio });
 };
 
 export const config = { path: "/api/avance" };
