@@ -1240,8 +1240,10 @@ function renderAv(){
  if(s.finOtroDia.length)av.push(`${s.finOtroDia.map(([d,n])=>`${nf.format(n)} líneas picadas el ${fmt(d)}`).join(', ')} no cuentan en este día`);
  if(s.suc){const bs=s.areas.filter(a=>{let f=0,t=0;s.suc.forEach(x=>{if(x[1]===a.area){f+=x[2];t+=x[2]+x[3]+x[4]}});return f!==a.fin||t!==a.tot});if(bs.length)av.push(`las sucursales no suman lo mismo que ${bs.map(a=>a.area).join(', ')}`)}
  if(s.finSinHora)av.push(`${nf.format(s.finSinHora)} líneas picadas sin hora de selección (no pasan al historial)`);
+ if(s.ubicDif)av.push(`${nf.format(s.ubicDif)} ${s.ubicDif===1?'fila trae':'filas traen'} "Ubicación de selección" y "De ubicación" de áreas distintas (se usó la de selección; ej.: ${s.ubicDifEj.map(([a,b])=>a+' / '+b).join(', ')})`);
  const notas=[];
  if(s.otras.length)notas.push('No cuentan otras áreas: '+s.otras.map(o=>`${o.area} ${nf.format(o.fin+o.pend+o.otro)}`).join(', '));
+ if(s.ubicAlt){const ua=[...s.ubicAlt.de.map(([a,n])=>`${a} ${nf.format(n)}`)],ul=s.ubicAlt.lpn.map(([a,n])=>`${a} ${nf.format(n)}`);if(ua.length)notas.push('Área tomada de "De ubicación" (sin ubicación de selección): '+ua.join(', '));if(ul.length)notas.push('Área tomada de "Ubicación de LPN": '+ul.join(', '))}
  if(s.nRepetidas)notas.push(`${s.nRepetidas} ${s.nRepetidas===1?'fila repetida':'filas repetidas'} idéntica${s.nRepetidas===1?'':'s'} en el reporte (se cuentan como las muestra el WMS)`);
  const c=$('avc');
  if(av.length){c.className='msg warn';c.textContent='Revisar: '+av.join(' · ')+(notas.length?' · '+notas.join(' · '):'')}
@@ -1294,6 +1296,8 @@ async function subirAvance(f,forzar){
   if(v.estadosRaros.length)extra.push('estados que no se cuentan: '+v.estadosRaros.map(([e,n])=>`${e} (${n})`).join(', '));
   if(v.otras.length)extra.push('otras áreas no contadas: '+v.otras.map(o=>`${o.area} ${o.fin+o.pend+o.otro}`).join(', '));
   if(v.finOtroDia.length)extra.push('líneas de otro día: '+v.finOtroDia.map(([d,n])=>`${fmt(d)} ${n}`).join(', '));
+  if(v.ubicAlt&&(v.ubicAlt.de.length||v.ubicAlt.lpn.length))extra.push('área tomada de De ubicación / Ubicación de LPN: '+[...v.ubicAlt.de,...v.ubicAlt.lpn].map(([a,n])=>`${a} ${n}`).join(', '));
+  if(v.ubicDif)extra.push(`${v.ubicDif} fila(s) con Ubicación de selección y De ubicación de áreas distintas`);
   if(v.repetidas)extra.push(`${v.repetidas} fila(s) idéntica(s) repetida(s), se cuentan`);
   ast(j.cambioTrasCierre||v.estadosRaros.length?'warn':'ok',`Avance guardado: ${fmtY(j.dia)}, datos hasta las ${hm(j.hora)} · ${nf.format(j.fin)} picadas de ${nf.format(j.tot)} (${pct(j.fin,j.tot)})`+(extra.length?' · '+extra.join(' · '):'')+(j.cambioTrasCierre?' · ATENCIÓN: ese día ya estaba cerrado y el reporte cambió: volvé a cerrarlo para actualizar el historial.':''));
   avDia=j.dia;AV._ult='';avJSON='';await loadAv();
