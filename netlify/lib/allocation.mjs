@@ -4,6 +4,9 @@
 //
 // Reglas (confirmadas por el encargado, oct-2026):
 //  - Área = prefijo de "Ubicación de selección" (LP1-03-17-04-05 -> LP1). Solo cuentan AREAS; las demás se informan aparte.
+//    Desde 25-nov-2026 el picking de RK ya no trae "Ubicación de selección": si viene vacía se usa "De ubicación",
+//    y si también está vacía, "Ubicación de LPN". Se informa cuántas líneas usaron cada respaldo y si alguna fila
+//    trae "Ubicación de selección" y "De ubicación" con áreas distintas (control).
 //  - Operador = "Usua Pick".
 //  - Picada = estado Finalizada. Pendiente = Asignado o Iniciado. Otro estado: no se cuenta y se avisa.
 //  - % avance = picadas ÷ (picadas + pendientes), total y por área.
@@ -20,13 +23,16 @@ const COLS = {
   estado: ["estado"],
   user: ["usua pick"],
   ubic: ["ubicacion de seleccion"],
+  deUbic: ["de ubicacion"],
+  ubicLpn: ["ubicacion de lpn"],
   suc: ["sucursal dest"],
   hsel: ["hora de seleccion"],
   modif: ["fe y hr modif"],
   crea: ["fe y hr crea"],
   onda: ["numero ejecuc"],
 };
-const REQUIRED = ["estado", "user", "ubic", "suc", "hsel"];
+const REQUIRED = ["estado", "user", "suc", "hsel"];
+const UBICS = ["ubic", "deUbic", "ubicLpn"];   // al menos una de las tres
 
 const FIN = new Set(["finalizada", "finalizado"]);
 const ASIG = new Set(["asignado", "asignada"]);
@@ -83,9 +89,9 @@ export function leerAllocation(text) {
   for (let i = 0; i < Math.min(rows.length, 10); i++) {
     const h = rows[i].map(norm), o = {};
     for (const [k, names] of Object.entries(COLS)) for (const n of names) { const j = h.indexOf(n); if (j >= 0) { o[k] = j; break; } }
-    if (REQUIRED.every((k) => k in o)) { hi = i; ix = o; break; }
+    if (REQUIRED.every((k) => k in o) && UBICS.some((k) => k in o)) { hi = i; ix = o; break; }
   }
-  if (hi < 0) throw new Error('No es el reporte Allocation del WMS: faltan las columnas Estado, Usua Pick, Ubicación de selección, Sucursal Dest u Hora de selección.');
+  if (hi < 0) throw new Error('No es el reporte Allocation del WMS: faltan las columnas Estado, Usua Pick, Sucursal Dest, Hora de selección o la ubicación (Ubicación de selección, De ubicación o Ubicación de LPN).');
 
   const ncol = rows[hi].length;
   const data = rows.slice(hi + 1).filter((r) => r.some((c) => String(c).trim() !== ""));
@@ -114,6 +120,20 @@ export function leerAllocation(text) {
   const H = { s: new Map(), u: new Map(), a: new Map(), ua: new Map(), hu: new Map(), hh: new Map() };
   // filas idénticas
   const vistos = new Map();
+  // ubicación: selección -> De ubicación -> Ubicación de LPN
+  const ubicAlt = { de: new Map(), lpn: new Map() };   // área -> líneas cuya área salió de ese respaldo
+  let ubicDif = 0; const ubicDifEj = [];               // filas con selección y De ubicación de áreas distintas
+  const pre = (u) => u.split("-")[0].trim().toUpperCase();
+  const col = (r, k) => (ix[k] === undefined ? "" : val(r[ix[k]]));
+  const ubicDe = (r) => {
+    const sel = col(r, "ubic"), de = col(r, "deUbic");
+    if (sel && de && pre(sel) !== pre(de)) { ubicDif++; if (ubicDifEj.length < 5) ubicDifEj.push([sel, de]); }
+    if (sel) return sel;
+    if (de) { inc(ubicAlt.de, pre(de) || "(vacía)"); return de; }
+    const lpn = col(r, "ubicLpn");
+    if (lpn) { inc(ubicAlt.lpn, pre(lpn) || "(vacía)"); return lpn; }
+    return "";
+  };
 
   for (const r of data) {
     if (r.length < ncol) filasCortas++;
@@ -121,8 +141,8 @@ export function leerAllocation(text) {
     inc(vistos, key);
 
     const est = norm(r[ix.estado]);
-    const ub = val(r[ix.ubic]);
-    const ar = ub.split("-")[0].trim().toUpperCase() || "(sin ubicación)";
+    const ub = ubicDe(r);
+    const ar = pre(ub) || "(sin ubicación)";
     const tipo = FIN.has(est) ? "fin" : ASIG.has(est) ? "asig" : INIC.has(est) ? "inic" : null;
 
     if (!AREAS.includes(ar)) {
@@ -175,7 +195,7 @@ export function leerAllocation(text) {
 
   const repetidas = [...vistos].filter(([, n]) => n > 1).map(([k, n]) => {
     const r = k.split("\u0001");
-    return { veces: n, ubic: val(r[ix.ubic]), suc: val(r[ix.suc]), estado: String(r[ix.estado] ?? "").trim() };
+    return { veces: n, ubic: col(r, "ubic") || col(r, "deUbic") || col(r, "ubicLpn"), suc: val(r[ix.suc]), estado: String(r[ix.estado] ?? "").trim() };
   });
 
   const ent = (m) => [...m].sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0])));
@@ -199,6 +219,9 @@ export function leerAllocation(text) {
     estadosRaros: ent(estadosRaros),
     finOtroDia: ent(finOtroDia),
     finSinUsuario, finSinHora, filasCortas,
+    // respaldo de ubicación (25-nov-2026): [área, líneas] que tomaron el área de "De ubicación" / "Ubicación de LPN"
+    ubicAlt: { de: ent(ubicAlt.de), lpn: ent(ubicAlt.lpn) },
+    ubicDif, ubicDifEj,
     repetidas,
     hist: histDia,   // día del reporte en el formato del historial (solo Finalizada con usuario y hora)
   };
